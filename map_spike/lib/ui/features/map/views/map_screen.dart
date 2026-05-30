@@ -9,6 +9,7 @@ import '../../../../config/app_config.dart';
 import '../../../../data/repositories/territory_repository.dart';
 import '../../../../data/services/hex_grid_service.dart';
 import '../../../../domain/models/claim_result.dart';
+import '../../zombies/views/zombie_spike_screen.dart';
 import '../view_models/map_view_model.dart';
 import 'widgets/economy_hud.dart';
 
@@ -158,6 +159,19 @@ class _MapScreenState extends State<MapScreen> {
             mini: true,
             onPressed: _viewModel.reset,
             child: const Icon(Icons.restart_alt),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton(
+            heroTag: 'zombies',
+            mini: true,
+            backgroundColor: Colors.green.shade700,
+            // Spike L0: zombies caminando por las calles + torreta.
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ZombieSpikeScreen(tileStore: widget.tileStore),
+              ),
+            ),
+            child: const Icon(Icons.pest_control),
           ),
           const SizedBox(height: 8),
           FloatingActionButton(
