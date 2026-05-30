@@ -7,11 +7,18 @@
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:map_spike/config/app_config.dart';
+import 'package:map_spike/data/repositories/territory_repository.dart';
+import 'package:map_spike/data/services/hex_grid_service.dart';
 import 'package:map_spike/main.dart';
 
 void main() {
-  test('MapSpikeApp acepta un cache store de tiles', () {
-    final app = MapSpikeApp(tileStore: MemCacheStore());
+  test('MapSpikeApp se arma con sus dependencias inyectadas', () {
+    final app = MapSpikeApp(
+      tileStore: MemCacheStore(),
+      gridService: const HexGridService(center: AppConfig.initialCenter),
+      territory: TerritoryRepository(),
+    );
     expect(app.tileStore, isA<CacheStore>());
   });
 }
