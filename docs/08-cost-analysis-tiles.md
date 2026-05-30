@@ -1,22 +1,26 @@
 # Análisis de costos de tiles (MapTiler)
 
-> Estado: borrador v0.1 · relacionado con [ADR 0005](decisions/0005-proveedor-tiles-maptiler.md)
+> Estado: v0.2 (corregido con medición real 2026-05-30) · relacionado con
+> [ADR 0005](decisions/0005-proveedor-tiles-maptiler.md)
 > Documento vivo. Los montos en dólares cambian — verificar en MapTiler. Acá importa el
 > **modelo** y los órdenes de magnitud.
 
 ## Resumen ejecutivo
 
-- MapTiler **factura por "sesiones de API"** (no por tile individual) cuando usás un
-  **estilo de mapa**. Confirmado en el dashboard: nuestro uso dio "1 sesión, 0 requests".
-  Una sesión agrupa todos los tiles cargados en un rato de uso.
-- **El plan Free es solo para uso personal / no comercial** y pone el logo de MapTiler.
-  Para un lanzamiento comercial hay que pasar a **Flex ($25/mes)** como mínimo.
-- El límite que importa en Free es **5.000 sesiones/mes** (los 100k requests aplican al uso
-  de tiles "crudos", no a los estilos).
-- **La caché es la palanca #1:** si los tiles están cacheados en el dispositivo, no se pega
-  a MapTiler → no se cuenta sesión. Un jugador anclado a su casa con caché genera muy pocas
-  sesiones. El **Modo Exploración** (calles nuevas) es el que más sesiones genera.
-- **Salida de escape a costo plano:** self-host / PMTiles, sin sesiones ni requests por uso.
+- **Para NUESTRA arquitectura (tiles raster propios con flutter_map), MapTiler factura por
+  REQUESTS:** cada tile que se carga (y no está cacheado) = **1 request** del servicio
+  "Rendered maps". Límite del plan **Free: 100.000 requests/mes**.
+- Las **"sesiones"** (5.000/mes en Free) son de **otro servicio** — el **SDK JS de mapas**
+  de MapTiler, que **NO usamos**. Para nosotros la métrica que importa son los **requests**.
+- **Medición real (2026-05-30):** 9.392 requests · 1 sesión, casi todo "Rendered maps
+  (512px)" → ~9% del cupo mensual gratis, gastado en **testeo de desarrollo SIN caché**
+  (muchos relanzamientos + pan/zoom). Con caché, un jugador real usa muchísimo menos.
+- **El plan Free es solo uso personal / no comercial** (+ logo MapTiler) → un lanzamiento
+  comercial necesita mínimo **Flex ($25/mes)** = 500.000 requests/mes.
+- **La caché es la palanca #1:** un tile cacheado en el dispositivo **no pega a MapTiler →
+  0 requests**. Jugador anclado a su casa con caché = pocos requests. El **Modo Exploración**
+  (calles nuevas) es el que más requests genera.
+- **Salida de escape a costo plano:** self-host / PMTiles, sin requests por uso.
 
 ## Base del cálculo
 
@@ -64,25 +68,24 @@ costo **recurrente**.
 | **Unlimited** | $295/mes | 300.000/mes (+$1,5 c/1.000) | 5.000.000/mes (+$0,08 c/1.000) | SLA 99,9%; 100 GB hosting |
 | **Custom** | contrato | a medida | a medida | Alto tráfico |
 
-> Para estilos de mapa, la unidad que cuenta es la **sesión**. "Extra sessions: None" en Free
-> significa que al llegar a 5.000 se corta el servicio (no hay sobrecosto, pero deja de servir).
+> Para los tiles raster que usamos, la unidad que cuenta son los **requests** (servicio
+> "Rendered maps"): Free = 100.000/mes (sin extra → al llegar, se corta). Las "sesiones" son
+> de otro servicio (el SDK JS) que **no** usamos.
 
-## Tabla 3 — Sesiones por escala (modelo con caché)
+## Tabla 3 — Requests por escala (modelo con caché)
 
-Una "sesión" ≈ una ráfaga de uso que **pega a MapTiler** (aprox. cada vez que el jugador abre
-la app y carga tiles **no cacheados**). Con buena caché, un jugador anclado a su casa pega a
+Cada tile **no cacheado** = 1 request. Con buena caché, un jugador anclado a su casa pega a
 MapTiler sobre todo la **primera vez** y cuando expira la caché o explora zonas nuevas.
 
-| Escenario | Sesiones/mes aprox. | Plan necesario |
+| Escenario | Requests/mes aprox. | Plan necesario |
 |-----------|---------------------|----------------|
-| Prototipo / pocos testers | decenas | ✅ Free |
-| ~50–100 jugadores activos (Modo Base, con caché) | hasta ~5.000 | ✅ Free (al límite) |
-| Cientos de jugadores (comercial) | 5.000–25.000 | Flex ($25) |
-| Miles de jugadores | 25.000–300.000 | Unlimited ($295) o self-host |
-| Exploración masiva / gran escala | millones | Self-host / PMTiles (costo plano) |
+| Desarrollo SIN caché (testeo intenso) | ~5.000–10.000 | ✅ Free (medido: 9.392) |
+| 1.000 jugadores Modo Base, CON caché (~100 nuevos × ~250) | ~25.000–40.000 | ✅ Free |
+| 1.000 jugadores, 30% exploradores (sin tope de zoom) | cientos de miles | Flex / Unlimited |
+| Gran escala / exploración masiva | millones | Self-host / PMTiles (costo plano) |
 
-> Sin caché, las sesiones ≈ aperturas de app (abrir 3×/día ≈ 90 sesiones/mes/jugador) y el
-> Free rinde mucho menos. **Por eso la caché del tile loader no es opcional.**
+> Sin caché, los requests se disparan (cada pan/zoom recarga tiles). **Por eso la caché no es
+> opcional** — y conviene agregarla incluso en desarrollo para no quemar el cupo.
 
 ## Perillas para controlar el costo
 
@@ -104,11 +107,11 @@ Por esto se eligió MapTiler (ver ADR 0005):
 
 ## Recomendación
 
-- **Prototipo / desarrollo:** plan **Free** alcanza (uso no comercial).
+- **Prototipo / desarrollo:** plan **Free** (100k requests/mes) alcanza — pero **agregá caché
+  de tiles ya en el prototipo** para no quemar el cupo testeando (medición: 9.392 en un día).
 - **Lanzamiento comercial:** mínimo **Flex ($25/mes)** — el Free no permite uso comercial.
-- **Construir caché agresiva en el tile loader desde el día 1** — es lo que mantiene bajas
-  las sesiones (y por lo tanto el costo).
+- **Caché agresiva desde el día 1** — es lo que mantiene bajos los **requests** (y el costo).
 - **Diseñar el Modo Exploración con el costo en mente** (caché de calles recorridas + límite
-  de zoom en movimiento): es el que más sesiones genera.
-- **Definir un umbral** (sesiones acercándose al límite del plan) para migrar a
+  de zoom en movimiento): es el que más requests genera.
+- **Definir un umbral** (requests acercándose al límite del plan) para migrar a
   **self-host / PMTiles** (costo plano), *antes* de que sea un problema.

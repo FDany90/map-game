@@ -39,12 +39,12 @@ editor de estilos fuera decisivo.
 ## Costos
 
 Análisis detallado en [`08-cost-analysis-tiles.md`](../08-cost-analysis-tiles.md). En corto:
-- Para estilos de mapa se factura por **sesiones de API** (no por tile). Free = **5.000
-  sesiones/mes**; Flex $25/mes = 25.000; Unlimited $295/mes = 300.000.
-- **Free es solo uso no comercial** (+ logo MapTiler) → un lanzamiento comercial necesita
-  mínimo **Flex ($25/mes)**.
-- La **caché** es la palanca #1: tiles cacheados no pegan a MapTiler → no cuentan sesión.
-- El **Modo Exploración** es el que más sesiones genera (calles nuevas no cacheadas).
+- Nuestros **tiles raster** se facturan por **REQUESTS** (servicio "Rendered maps"): cada
+  tile no cacheado = 1 request. Free = **100.000 requests/mes**; Flex $25 = 500.000;
+  Unlimited $295 = 5.000.000. (Las "sesiones" son del SDK JS que no usamos.)
+- **Free es solo uso no comercial** (+ logo MapTiler) → comercial necesita mínimo **Flex ($25/mes)**.
+- La **caché** es la palanca #1: tiles cacheados no pegan a MapTiler → 0 requests.
+- Medición real (2026-05-30): 9.392 requests en un día de testeo **sin caché**.
 - Salida de escape a costo plano: **self-host / PMTiles**.
 
 ## Consecuencias
