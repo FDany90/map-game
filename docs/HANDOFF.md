@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-05-30** (caché de tiles implementada)
+> Última actualización: **2026-05-30** (caché de tiles + arquitectura por capas + botón cerrar + skill de UI)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -27,7 +27,7 @@ capa opcional = **Modo Exploración** con GPS. Hecho por **un desarrollador en s
 | 2 Datos & economía | 🟡 (economía ✅, modelo de datos ⬜) |
 | 3 Mockups/UX | ⬜ |
 | 4 Spike del mapa | ✅ (validado con flutter_map; prototipo jugable) |
-| 5 Prototipo Modo Base | 🟡 (mapa + hexágonos + economía mínima andando) |
+| 5 Prototipo Modo Base | 🟡 (mapa + hexágonos + economía + caché + arquitectura por capas) |
 | 6 Multijugador | ⬜ |
 | 7 Modo Exploración | ⬜ |
 | 8 Arte/pulido/launch | ⬜ |
@@ -60,9 +60,12 @@ App Flutter que ya corre en emulador Android:
 - Mapa **MapTiler oscuro** centrado en **Palermo, BA**.
 - **Grilla de hexágonos** reclamables (tocar para reclamar; se pintan verde).
 - **Mini-economía:** reclamar cuesta 10 suministros; cada hexágono produce +30/min; HUD en vivo.
-- Controles de **zoom +/−** y label de zoom.
+- Controles de **zoom +/−**, **botón de cerrar** (FAB rojo → `SystemNavigator.pop()`) y label de zoom.
 - **Caché de tiles en disco** (Hive vía `flutter_map_cache`): los tiles ya vistos se sirven
   localmente en vez de re-pedirse a MapTiler.
+- **Arquitectura por capas (MVVM):** `domain/` (modelos) · `data/` (servicios + repositorios) ·
+  `ui/features/map/` (ViewModel + views). La economía vive en `TerritoryRepository` (testeable).
+  Ver [03-architecture.md](03-architecture.md).
 - (En commits previos también se probó: oleada de zombies + torreta con FPS — combate.)
 
 ### Cómo correrlo
@@ -85,9 +88,10 @@ y poné tu key de [cloud.maptiler.com](https://cloud.maptiler.com).
 
 ## 🛠️ Entorno (esta máquina, Windows 11)
 - ✅ Flutter 3.44 · Android Studio + emulador **Pixel_7 (API 37)** · Git 2.54
-- ❌ Node.js (no hace falta)
-- **Skills de Flutter** instaladas en `.claude/skills/` (arquitectura + fix-layout) →
-  **requieren reiniciar Claude Code** para activarse.
+- ✅ **Node.js v24 / npm 11** (instalado para el CLI `npx skills add`). Gotcha: cambios de PATH
+  no aplican a shells ya abiertas → refrescar el PATH o abrir una consola nueva.
+- **Skills en `.claude/skills/`**: ver sección **"🧠 Skills del proyecto"**. Los **locales**
+  cargan sin reiniciar; los oficiales de Flutter pueden requerir reiniciar Claude Code.
 
 ### ⚠️ Gotchas operativos
 - Si el emulador se lanza desde una **tarea en segundo plano**, se **cierra** al terminar la
@@ -95,6 +99,23 @@ y poné tu key de [cloud.maptiler.com](https://cloud.maptiler.com).
 - En el emulador, **pinch** = `Ctrl` + arrastrar; las letras del mapa se ven chicas porque
   el emulador se muestra al ~33% (en celular real se ve mejor; la solución de fondo es un
   estilo propio de MapTiler).
+
+---
+
+## 🧠 Skills del proyecto (se auto-usan cuando corresponde)
+Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en `CLAUDE.md`.
+- **`flutter-apply-architecture-best-practices`** (oficial) — estructurar/refactorizar a capas
+  (UI-MVVM · Data · Domain). Se usó para reorganizar `map_spike/`.
+- **`flutter-fix-layout-issues`** (oficial) — errores de layout (overflows, constraints).
+- **`flutter-caching-data`** (local, a medida) — persistencia/caché: tiles, imágenes,
+  offline-first. Se usó para la caché de tiles.
+- **`mobile-game-ui-design`** (local, a medida) — UI/UX mobile-first del juego: HUD sobre mapa
+  vivo, ergonomía táctil, feedback de hexágonos, recursos, HUD por modo, performance.
+
+> ⚠️ **Lección skills.sh:** mezcla skills reales con **entradas fabricadas** que no existen en
+> el repo fuente (confirmados falsos: `flutter-caching-data` en `flutter/skills`,
+> `davila7/.../mobile-design`). **Verificar siempre el `SKILL.md` contra el raw de GitHub** antes
+> de instalar. Por eso los de caching y UI los escribimos **locales y a medida**.
 
 ---
 
@@ -119,7 +140,14 @@ y poné tu key de [cloud.maptiler.com](https://cloud.maptiler.com).
    al `TileLayer` (`CachedTileProvider`, `maxStale: 30 días`). `flutter analyze` limpio y test
    en verde. **Por qué:** sin caché cada pan/zoom recargaba tiles y quemaba requests de MapTiler
    (medido: **9.392 en un día** de testeo, ~9% del cupo Free de 100k/mes). Era la palanca #1 de
-   costo. **Falta:** validar en emulador y, si se quiere, medir el ahorro real en el dashboard.
+   costo. ✅ **Validado en emulador** (box `dio_cache.hive` ~10 MB en disco). Opcional: medir el
+   ahorro real en el dashboard de MapTiler.
+0b. ✅ **HECHO (2026-05-30) — Arquitectura por capas en `map_spike` + botón de cerrar:** se
+   refactorizó el `main.dart` monolítico a capas (`domain` / `data` / `ui`-MVVM) con el skill
+   `flutter-apply-architecture-best-practices`. La economía quedó en `TerritoryRepository`
+   (testeable: 7 tests) y la UI en `MapViewModel` + views; se extrajo `EconomyHud`. Se agregó un
+   FAB de cerrar (`SystemNavigator.pop()`). `flutter analyze` limpio, 8 tests verdes, corre en
+   emulador. Estructura documentada en [03-architecture.md](03-architecture.md).
 1. **Cerrar Etapa 2 — Modelo de datos** (`04-data-model.md`): entidades Hexágono, Base,
    Edificio, Recurso, Unidad y relaciones → prepara el backend.
 2. **Implementar el nuevo modelo de economía en el prototipo:** loot **finito** que se agota
@@ -136,10 +164,11 @@ y poné tu key de [cloud.maptiler.com](https://cloud.maptiler.com).
 7. **Backend/multiplayer (Etapa 6):** confirmar Supabase vs Firebase; diseñar sincronización
    del territorio.
 8. **Modo Exploración (Etapa 7):** GPS en vivo + combate activo + gate de combustible.
-9. **Reactivar las skills** de Flutter (reiniciar Claude Code).
 
 **Recomendado para arrancar la próxima sesión:** cerrar la **Etapa 2 (modelo de datos)** o
-**implementar el modelo de economía nuevo en el prototipo** (lo que tenga más ganas).
+**implementar el modelo de economía nuevo en el prototipo** (lo que tenga más ganas). La
+arquitectura por capas ya deja un lugar claro para ambos: el modelo de datos extiende
+`domain/models/` y la economía nueva entra en `TerritoryRepository`.
 
 ---
 

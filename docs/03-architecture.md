@@ -67,6 +67,37 @@ sprites comparten **una sola cámara y un solo sistema de coordenadas**.
 > - **"Capas/layers" del juego** = lo que apilamos en Flame (mapa, hexágonos, edificios,
 >   unidades, efectos, HUD), manejado por prioridad de render.
 
+## Estructura del código del prototipo (`map_spike/`)
+
+> Refactorizado a una arquitectura por **capas (MVVM)** con el skill
+> `flutter-apply-architecture-best-practices` (2026-05-30). Separa UI / lógica / datos para
+> escalar hacia el backend y mantener la lógica de juego testeable sin levantar la UI.
+
+```
+lib/
+├── main.dart                          # composition root: caché de tiles + DI + runApp
+├── config/app_config.dart             # constantes (centro, zoom, estilo/key de MapTiler)
+├── domain/models/                     # Hex, ClaimResult (modelos puros, sin UI ni red)
+├── data/
+│   ├── services/hex_grid_service.dart         # geometría sin estado (grilla, hex más cercano)
+│   └── repositories/territory_repository.dart  # fuente única de verdad: economía (seam backend)
+└── ui/features/map/
+    ├── view_models/map_view_model.dart   # ChangeNotifier: estado + tick económico + zoom + claim
+    └── views/
+        ├── map_screen.dart               # View (FlutterMap + capas) con ListenableBuilder
+        └── widgets/economy_hud.dart      # HUD extraído (widget "tonto")
+```
+
+- **Inyección de dependencias** por constructor (manual; si crece → `get_it` / `provider`).
+- **`TerritoryRepository`** es la fuente única de verdad de la economía: hoy en memoria, mañana
+  fachada del BaaS (Etapa 6) **sin tocar la UI ni el ViewModel**. Cubierto por
+  `test/territory_repository_test.dart` (7 casos).
+- **Caché de tiles** integrada en el `TileLayer` (`CachedTileProvider` + `HiveCacheStore`); ver
+  el skill `flutter-caching-data`.
+- El diseño de la UI se guía con el skill `mobile-game-ui-design` (mobile-first, HUD sobre mapa).
+- **Dónde crece cada cosa:** el **modelo de datos** (Etapa 2) extiende `domain/models/`; la
+  **economía nueva** (loot finito, drops, territorio oscuro) entra en `TerritoryRepository`.
+
 ## Combate en diferido (Modo Base)
 
 El combate de torretas se resuelve de forma **asíncrona**: al volver a la app se calcula
@@ -77,5 +108,6 @@ el resultado del tiempo ausente. No requiere servidor de tiempo real → backend
 
 - Confirmar BaaS (Supabase vs Firebase) — ADR 0003.
 - Definir el modelo de datos (Etapa 2): hexágono, base, edificio, recurso, unidad.
-- Estrategia de caché de tiles (memoria + disco) y límites del plan gratuito del proveedor.
+- ✅ Caché de tiles (disco, Hive vía `flutter_map_cache`) implementada. Pendiente: medir el uso
+  real contra el límite Free de MapTiler (100k requests/mes).
 - Modelo de sincronización del estado del territorio entre jugadores.
