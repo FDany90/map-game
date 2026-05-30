@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-05-30**
+> Última actualización: **2026-05-30** (caché de tiles implementada)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -61,6 +61,8 @@ App Flutter que ya corre en emulador Android:
 - **Grilla de hexágonos** reclamables (tocar para reclamar; se pintan verde).
 - **Mini-economía:** reclamar cuesta 10 suministros; cada hexágono produce +30/min; HUD en vivo.
 - Controles de **zoom +/−** y label de zoom.
+- **Caché de tiles en disco** (Hive vía `flutter_map_cache`): los tiles ya vistos se sirven
+  localmente en vez de re-pedirse a MapTiler.
 - (En commits previos también se probó: oleada de zombies + torreta con FPS — combate.)
 
 ### Cómo correrlo
@@ -112,11 +114,12 @@ y poné tu key de [cloud.maptiler.com](https://cloud.maptiler.com).
 ---
 
 ## ⬜ Temas pendientes / próximos pasos (priorizados)
-0. **⚡ Quick win — Caché de tiles en `map_spike`:** agregar un cache provider a flutter_map
-   (ej. paquete `flutter_map_cache`) + un par de líneas en el `TileLayer`. **Por qué:** sin
-   caché, cada pan/zoom recarga tiles y quema requests de MapTiler (medido: **9.392 en un día**
-   de testeo, ~9% del cupo Free de 100k/mes). La caché es la palanca #1 de costo y lo que
-   harán los jugadores reales. Barato y de alto valor.
+0. ✅ **HECHO (2026-05-30) — Caché de tiles en `map_spike`:** se agregó `flutter_map_cache`
+   + `dio_cache_interceptor` + `HiveCacheStore` (persistente en disco, `getTemporaryDirectory`)
+   al `TileLayer` (`CachedTileProvider`, `maxStale: 30 días`). `flutter analyze` limpio y test
+   en verde. **Por qué:** sin caché cada pan/zoom recargaba tiles y quemaba requests de MapTiler
+   (medido: **9.392 en un día** de testeo, ~9% del cupo Free de 100k/mes). Era la palanca #1 de
+   costo. **Falta:** validar en emulador y, si se quiere, medir el ahorro real en el dashboard.
 1. **Cerrar Etapa 2 — Modelo de datos** (`04-data-model.md`): entidades Hexágono, Base,
    Edificio, Recurso, Unidad y relaciones → prepara el backend.
 2. **Implementar el nuevo modelo de economía en el prototipo:** loot **finito** que se agota

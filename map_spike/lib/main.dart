@@ -2,16 +2,28 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
+import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
+import 'package:dio_cache_interceptor_hive_store/dio_cache_interceptor_hive_store.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:latlong2/latlong.dart';
 import 'secrets.dart' as secrets;
 
-void main() => runApp(const MapSpikeApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Cache de tiles en disco: persiste entre reinicios. Cada tile servido desde
+  // aca = 1 request de MapTiler ahorrado.
+  final dir = await getTemporaryDirectory();
+  final tileStore = HiveCacheStore('${dir.path}/maptiler_tiles');
+  runApp(MapSpikeApp(tileStore: tileStore));
+}
 
 class MapSpikeApp extends StatelessWidget {
-  const MapSpikeApp({super.key});
+  const MapSpikeApp({super.key, required this.tileStore});
+  final CacheStore tileStore;
   @override
   Widget build(BuildContext context) =>
-      const MaterialApp(title: 'MAP Spike', home: MapScreen());
+      MaterialApp(title: 'MAP Spike', home: MapScreen(tileStore: tileStore));
 }
 
 // Un hexágono del territorio.
@@ -23,7 +35,8 @@ class Hex {
 }
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({super.key, required this.tileStore});
+  final CacheStore tileStore;
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -172,6 +185,11 @@ class _MapScreenState extends State<MapScreen> {
                 urlTemplate:
                     'https://api.maptiler.com/maps/$style/{z}/{x}/{y}.png?key=$maptilerKey',
                 userAgentPackageName: 'com.example.map_spike',
+                tileProvider: CachedTileProvider(
+                  // Tiles validos 30 dias antes de re-pedirse a MapTiler.
+                  maxStale: const Duration(days: 30),
+                  store: widget.tileStore,
+                ),
               ),
               PolygonLayer(
                 polygons: [
