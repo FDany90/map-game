@@ -49,6 +49,9 @@ capa opcional = **Modo Exploración** con GPS. Hecho por **un desarrollador en s
 - **Movimiento:** jugar desde casa (núcleo) + exploración opcional.
 - **Investigación de mercado:** el nicho de MAP está **vacío** (nadie hace zombie territorial
   social sobre el mapa real desde casa). [10-investigacion-hallazgos.md](10-investigacion-hallazgos.md)
+- **Costos MapTiler:** para nuestros tiles raster se factura por **REQUESTS** (Free 100k/mes;
+  cada tile no cacheado = 1 request), NO por sesiones. La **caché** es la palanca #1.
+  [08-cost-analysis-tiles.md](08-cost-analysis-tiles.md)
 
 ---
 
@@ -109,6 +112,11 @@ y poné tu key de [cloud.maptiler.com](https://cloud.maptiler.com).
 ---
 
 ## ⬜ Temas pendientes / próximos pasos (priorizados)
+0. **⚡ Quick win — Caché de tiles en `map_spike`:** agregar un cache provider a flutter_map
+   (ej. paquete `flutter_map_cache`) + un par de líneas en el `TileLayer`. **Por qué:** sin
+   caché, cada pan/zoom recarga tiles y quema requests de MapTiler (medido: **9.392 en un día**
+   de testeo, ~9% del cupo Free de 100k/mes). La caché es la palanca #1 de costo y lo que
+   harán los jugadores reales. Barato y de alto valor.
 1. **Cerrar Etapa 2 — Modelo de datos** (`04-data-model.md`): entidades Hexágono, Base,
    Edificio, Recurso, Unidad y relaciones → prepara el backend.
 2. **Implementar el nuevo modelo de economía en el prototipo:** loot **finito** que se agota
