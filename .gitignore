@@ -1,0 +1,39 @@
+# --- Flutter / Dart (para cuando exista el proyecto de código) ---
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+pubspec.lock
+
+# --- Android ---
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/local.properties
+**/android/key.properties
+*.keystore
+*.jks
+
+# --- iOS ---
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+
+# --- IDE ---
+.idea/
+.vscode/
+*.iml
+*.log
+
+# --- Secretos / claves de API (¡nunca subir!) ---
+.env
+.env.*
+**/secrets.dart
+api_keys.dart
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db
