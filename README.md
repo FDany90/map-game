@@ -5,9 +5,12 @@ Tu barrio es el campo de batalla: plantás tu base en tu ubicación real, te exp
 hexágono por hexágono, y los monstruos nacen del territorio abandonado. Cooperás (y
 competís) con tus vecinos reales por el territorio.
 
-- **Plataforma:** App nativa móvil (Android + iOS) con **Flutter + Flame**.
-- **Estado actual:** Etapa 0 — Diseño y documentación. Sin código todavía.
+- **Plataforma:** App nativa móvil (Android + iOS) con **Flutter** (+ **flutter_map**; Flame diferido al combate).
+- **Estado actual:** prototipo jugable en `map_spike/` (mapa + hexágonos + economía mínima). Diseño en Etapa 2.
 - **Modo de juego:** "jugar desde casa" como núcleo + "exploración" como capa opcional.
+
+> 👉 **¿Retomando el proyecto? Empezá por [docs/HANDOFF.md](docs/HANDOFF.md)** — estado,
+> cómo correr el prototipo, decisiones resueltas y próximos pasos.
 
 ## Documentación
 
@@ -16,6 +19,7 @@ a medida que el proyecto avanza y se versionan en Git.
 
 | Doc | Contenido |
 |-----|-----------|
+| [🟢 HANDOFF](docs/HANDOFF.md) | **Empezá acá para retomar:** estado, cómo correr, pendientes |
 | [00 — Roadmap](docs/00-roadmap.md) | Etapas del proyecto y estado |
 | [01 — Visión](docs/01-vision.md) | Pitch, pilares, público objetivo |
 | [02 — Diseño de juego (GDD)](docs/02-game-design.md) | Bucle de juego, modos, economía, social |
@@ -34,11 +38,12 @@ a medida que el proyecto avanza y se versionan en Git.
 2. Los documentos se commitean y suben a Git en cada cambio relevante.
 3. Las decisiones técnicas importantes se registran como un ADR en `docs/decisions/`.
 
-## Requisitos para etapas de código (Etapa 4 en adelante)
+## Entorno (instalado en la máquina de desarrollo)
 
-Todavía **no** instalados — hacen falta cuando empecemos a programar:
+- [x] Git 2.54
+- [x] Flutter SDK 3.44 (incluye Dart)
+- [x] Android Studio + emulador **Pixel_7 (API 37)**
+- [x] Cuenta MapTiler + API key (en `map_spike/lib/secrets.dart`, **no** versionado)
+- [ ] Xcode (iOS) — solo en Mac, pendiente
 
-- [ ] Git
-- [ ] Flutter SDK (incluye Dart)
-- [ ] Android Studio (emulador Android) y/o Xcode (iOS, requiere Mac)
-- [ ] Cuenta en proveedor de tiles (MapTiler / Mapbox) — plan gratuito para empezar
+Para correr el prototipo y los detalles operativos, ver [docs/HANDOFF.md](docs/HANDOFF.md).

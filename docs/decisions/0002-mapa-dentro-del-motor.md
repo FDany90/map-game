@@ -1,7 +1,12 @@
 # ADR 0002 — El mapa se renderiza dentro del motor
 
-- **Estado:** Aceptado
+- **Estado:** ❌ Reemplazado por [ADR 0006](0006-mapa-flutter-map-flame-combate.md)
 - **Etapa:** 1
+
+> **Reemplazado:** tras el spike (Etapa 4) descubrimos que `flutter_map` NO es una platform
+> view nativa (es Dart puro), así que la premisa de este ADR ya no aplica. El mapa se
+> renderiza con **flutter_map** y Flame queda diferido al combate. Ver
+> [ADR 0006](0006-mapa-flutter-map-flame-combate.md). Se conserva como referencia histórica.
 
 ## Contexto
 

@@ -1,17 +1,23 @@
 # Arquitectura técnica
 
-> Estado: borrador v0.1 · Etapa 1
+> Estado: borrador v0.2 · Etapa 1-4
 > Documento vivo. Las decisiones grandes se registran como ADRs en `decisions/`.
+>
+> **Actualizado (Etapa 4):** tras el spike, el mapa se renderiza con **flutter_map** (Dart,
+> no en Flame). El ADR 0002 quedó **reemplazado por el
+> [0006](decisions/0006-mapa-flutter-map-flame-combate.md)**; Flame queda **diferido y
+> acotado al combate**. Las secciones de "mapa dentro de Flame" y "tile loader" de abajo
+> quedan como **referencia histórica**.
 
 ## Stack elegido
 
 | Capa | Tecnología | ADR |
 |------|-----------|-----|
 | App (Android + iOS) | **Flutter** | [0001](decisions/0001-stack-flutter-flame.md) |
-| Motor de juego 2D | **Flame** (sobre Flutter) | [0001](decisions/0001-stack-flutter-flame.md) |
-| Render del mapa | **Tiles dentro del motor** (no SDK de mapa nativo) | [0002](decisions/0002-mapa-dentro-del-motor.md) |
-| Tipo de tiles (prototipo) | **Raster estilizados** (Nivel A de fidelidad) | [0004](decisions/0004-tiles-raster-estilizados.md) |
-| Grilla de hexágonos | **H3** (paquete `h3_flutter`) | — |
+| Render del mapa + capas | **flutter_map** + capas propias (PolygonLayer, etc.) | [0006](decisions/0006-mapa-flutter-map-flame-combate.md) |
+| Motor de combate | **Flame**, diferido/opcional (solo combate) | [0001](decisions/0001-stack-flutter-flame.md) · [0006](decisions/0006-mapa-flutter-map-flame-combate.md) |
+| Tipo de tiles | **Raster estilizados** (Nivel A de fidelidad) | [0004](decisions/0004-tiles-raster-estilizados.md) |
+| Grilla de hexágonos | **H3** (prototipo: grilla calculada a mano) | — |
 | Proveedor de tiles | **MapTiler** (raster, plan gratuito) | [0005](decisions/0005-proveedor-tiles-maptiler.md) |
 | Backend / multijugador | **BaaS: Supabase o Firebase** (a confirmar) | [0003](decisions/0003-backend-baas.md) |
 
@@ -29,7 +35,12 @@ Flutter (app, menús, HUD, tiendas, login)
 Backend (BaaS): quién posee cada hexágono + qué hay construido + economía
 ```
 
-## Decisión central: el mapa se dibuja DENTRO del motor
+## (Histórico) Mapa dentro del motor — reemplazado por ADR 0006
+
+> ⚠️ Esta sección describe el enfoque **original** (mapa renderizado en Flame con tile loader
+> propio), **reemplazado** por el [ADR 0006](decisions/0006-mapa-flutter-map-flame-combate.md):
+> el mapa va con flutter_map (que ya hace tiles, nombres, zoom y caché). Se conserva como
+> referencia de por qué se evaluó y descartó.
 
 En vez de usar un SDK de mapa nativo (MapLibre/Mapbox) y dibujar el juego encima
 (dos sistemas de coordenadas que hay que sincronizar), **renderizamos los tiles del mapa
