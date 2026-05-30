@@ -129,6 +129,8 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 - [08-cost-analysis-tiles.md](08-cost-analysis-tiles.md) — costos MapTiler (por sesión)
 - [09-referencias.md](09-referencias.md) — juegos: qué tomar/evitar
 - [10-investigacion-hallazgos.md](10-investigacion-hallazgos.md) — research con fuentes
+- [11-zombies-calles-cost.md](11-zombies-calles-cost.md) — costo/opciones del movimiento de zombies (visual)
+- [12-building-extrusion.md](12-building-extrusion.md) — edificios 3D: opciones y recomendación (extrusión propia)
 - [spike-01-maptiler-flutter.md](spike-01-maptiler-flutter.md) — guía del spike
 - [decisions/](decisions/) — ADRs 0001-0006
 
@@ -154,8 +156,18 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
    + **drops de zombies** al morir + limpiar territorio oscuro antes de reclamar (sentir el
    anti-idle).
 3. **Estilo propio en MapTiler Customize:** look apocalíptico + fuentes más grandes.
-4. **Zombies caminando por las calles:** requiere el **grafo de calles** (OSM) + pathfinding
-   (routing API o A\* local). Conecta con "monstruos sueltos por la calle".
+4. **Zombies caminando por las calles (VISUAL — alcance decidido 2026-05-30):** es **valor
+   visual** para que el farmeo se *vea* (zombies spawnean, caminan por la calle, la base los mata
+   a tiros y suben recursos), **no** posición exacta. → **No requiere grafo/A\***: enfoque
+   "carriles de calle" (calles de Overpass cacheadas una vez → caminar por la polyline hacia la
+   base). Vive en Flame (combate, ADR 0006). Costo ~$0. Detalle y opciones en
+   [11-zombies-calles-cost.md](11-zombies-calles-cost.md).
+   ✅ **Spike L0 HECHO (2026-05-30):** `OverpassService` trae calles reales (ojo: Overpass exige
+   **User-Agent** o da 406) + `ZombieSpikeViewModel`/`ZombieSpikeScreen` (zombies caminan por la
+   polyline, torreta dispara y mata, suben recursos). Verificado en emulador con calles OSM reales.
+   Entrada: FAB verde 🐛 en el mapa. ✅ **Caché en disco** vía `StreetsRepository` (best-practice:
+   caché/offline/fallback en el repositorio, no en el service): orden caché→Overpass→fallback;
+   `OverpassService` quedó puro (endpoint + mirror, lanza si falla). **Falta:** pasar a Flame al escalar.
 5. **Segunda investigación** (huecos del informe): Ingress/portales, EVE/sovereignty,
    anti-ballena más allá de escudos, y **densidad mínima de jugadores por barrio** (el
    problema del mapa vacío).
@@ -164,6 +176,9 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 7. **Backend/multiplayer (Etapa 6):** confirmar Supabase vs Firebase; diseñar sincronización
    del territorio.
 8. **Modo Exploración (Etapa 7):** GPS en vivo + combate activo + gate de combustible.
+9. **Edificios 3D (extrusión):** decisión preliminar = extrusión propia estilizada con footprints
+   `building=*` de Overpass en Flame (NO MapLibre, que revertiría el ADR 0006). Si se valida con un
+   mini-spike visual, promover a ADR 0007. Ver [12-building-extrusion.md](12-building-extrusion.md).
 
 **Recomendado para arrancar la próxima sesión:** cerrar la **Etapa 2 (modelo de datos)** o
 **implementar el modelo de economía nuevo en el prototipo** (lo que tenga más ganas). La
