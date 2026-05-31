@@ -131,8 +131,12 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 - [10-investigacion-hallazgos.md](10-investigacion-hallazgos.md) — research con fuentes
 - [11-zombies-calles-cost.md](11-zombies-calles-cost.md) — costo/opciones del movimiento de zombies (visual)
 - [12-building-extrusion.md](12-building-extrusion.md) — edificios 3D: opciones y recomendación (extrusión propia)
+- [13-modos-pantallas-backlog.md](13-modos-pantallas-backlog.md) — backlog de modos/pantallas (Menú, Base, Mapa, Exploración, Dungeon, LOD)
+- [14-osm-datos-referencia.md](14-osm-datos-referencia.md) — OSM/Overpass: atributos para escenas, costo/conectividad, caché
+- [15-placement-bases-vecinos.md](15-placement-bases-vecinos.md) — anti-solapamiento de bases de vecinos (grilla + clustering)
+- [16-modelo-hexagonos-bd.md](16-modelo-hexagonos-bd.md) — BD de hexágonos: generación lazy (sparse, se materializa al jugar)
 - [spike-01-maptiler-flutter.md](spike-01-maptiler-flutter.md) — guía del spike
-- [decisions/](decisions/) — ADRs 0001-0006
+- [decisions/](decisions/) — ADRs 0001-0007
 
 ---
 
@@ -179,6 +183,35 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 9. **Edificios 3D (extrusión):** decisión preliminar = extrusión propia estilizada con footprints
    `building=*` de Overpass en Flame (NO MapLibre, que revertiría el ADR 0006). Si se valida con un
    mini-spike visual, promover a ADR 0007. Ver [12-building-extrusion.md](12-building-extrusion.md).
+10. **Backlog de modos/pantallas** (ideas, sin decidir): Menú · Modo Base (acotar zoom-out a la
+    zona) · Modo Mapa (país/provincia/mundo, clanes dominantes, ranking) · Modo Exploración ·
+    Modo Dungeon · **LOD** (mostrar/ocultar elementos por nivel de zoom). Ver
+    [13-modos-pantallas-backlog.md](13-modos-pantallas-backlog.md).
+11. **Estrategia visual decidida (ADR 0007):** mapa top-down con **iconos** (base/zombies/dungeon/
+    boss) + al tocar se entra a **escena isométrica 2.5D en Flame** (Base/Combate/Dungeon)
+    **generada proceduralmente desde OSM** (calles: tipo/ancho/sentido + bearing real; edificios:
+    footprint + niveles/altura/techo). Nivel 2 (piezas modulares orientadas) → Nivel 3 (geometría
+    fiel); **preservar el norte real**. Ver
+    [decisions/0007-estrategia-visual-mapa-iconos-escenas-isometricas.md](decisions/0007-estrategia-visual-mapa-iconos-escenas-isometricas.md)
+    + [14-osm-datos-referencia.md](14-osm-datos-referencia.md). **Overpass es gratis/sin key**
+    (fair-use); en producción va **detrás del backend** (Etapa 6), no llamado por cada jugador.
+12. **Pathfinding del personaje a un punto (ascenso a L2):** mandar mi personaje por las **calles
+    reales** a un destino (zombies/dungeon) con **tiempo según la distancia real**. Falta `RoadGraph`
+    (grafo: intersecciones = nodos compartidos en OSM) + A\*; el "caminar" (`_advance`) ya existe.
+    ~150 líneas, $0, local, reusa calles cacheadas. Detalle en
+    [11-zombies-calles-cost.md](11-zombies-calles-cost.md).
+13. **Anti-solapamiento de bases de vecinos:** si varios vecinos de una cuadra juegan, sus bases
+    no deben pisarse. Preliminar: territorio **discreto por hexágono** (1 base/hex; si está ocupado
+    → hex libre más cercano) + **clustering/LOD** para legibilidad visual. Ver
+    [15-placement-bases-vecinos.md](15-placement-bases-vecinos.md). Confirmar en Etapa 2 (datos).
+14. **Modelo de BD de hexágonos (clave para Etapa 2):** NO se pre-puebla el planeta (miles de
+    millones de hexágonos). **Generación lazy**: hex ausente = "sin explorar" (default gratis); se
+    **materializa** al interactuar, sembrando contenido **determinista por `hexId` (H3)** + datos
+    OSM. BD sparse (solo lo jugado), mismo patrón que calles/tiles. **Dificultad = GRADIENTE
+    determinista** (no random): cerca del spawn/urbano = fácil, lejos/descampado = difícil
+    (risk-reward, sale del OSM). **Onboarding seguro:** se nace sin base, solo personaje, en safe
+    zone de baja dificultad; se empieza explorando. Ver
+    [16-modelo-hexagonos-bd.md](16-modelo-hexagonos-bd.md).
 
 **Recomendado para arrancar la próxima sesión:** cerrar la **Etapa 2 (modelo de datos)** o
 **implementar el modelo de economía nuevo en el prototipo** (lo que tenga más ganas). La

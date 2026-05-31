@@ -79,6 +79,33 @@ líneas, en `Isolate`) — pero **para el alcance actual (visual) ni eso hace fa
 - En **Modo Exploración** (GPS en vivo) ver zombies venir por tu calle suma más; ahí podría
   justificarse subir de nivel en la escalera. Para Base, **L0 alcanza**.
 
+## PENDIENTE: pathfinding del personaje a un punto (ascenso a L2)
+Mecánica nueva pedida: mandar **mi personaje (icono en Modo Mapa)** a caminar por las **calles
+reales** hasta un destino (grupo de zombies a N cuadras, un dungeon), con **tiempo de recorrido
+según la distancia real**. Es el zombie "al revés" pero con una diferencia clave:
+
+- **Zombie actual (L0):** sigue UNA sola calle (un `way`). Parece doblar porque el propio `way`
+  tiene curvas/codos, pero **nunca cambia de calle**. No necesita pathfinding.
+- **Personaje a destino:** debe **cambiar de calle en intersecciones** (A → doblar → B) → eso es
+  navegar una **red conectada** = pathfinding real (**L2**).
+
+**Lo que ya está resuelto:** el "caminar" — `_advance()` (avanzar metros por una polyline) sirve
+igual. Solo falta **generar la polyline-ruta**; una vez que la tenés, se camina como un zombie.
+
+**Lo que falta construir (2 piezas, ~150 líneas, $0, local, reusa calles ya cacheadas):**
+1. **`RoadGraph`** — unir las calles sueltas en grafo: **nodos** = intersecciones (en OSM las
+   calles que se cruzan comparten el mismo punto lat/lon → deduplicar coordenadas); **aristas** =
+   tramos con su largo en metros. Se arma una vez por zona.
+2. **A\* / Dijkstra** sobre el grafo → ruta más corta del nodo más cercano al destino →
+   polyline concatenada → caminar con `_advance`.
+
+- **Tiempo de recorrido = largo de la ruta (m) / velocidad del personaje.** Habilita mecánica
+  asíncrona tipo "mandar tropas": el personaje tarda según la distancia real.
+- **Caveat:** la ruta depende de que OSM comparta nodos en intersecciones (urbano: casi siempre
+  sí; puentes/zonas mal mapeadas: a veces no). Suficiente para un juego.
+- **Render:** un `Marker` moviéndose por la ruta en flutter_map (igual que los zombies, al revés
+  y con pathfinding).
+
 ## Implementación del spike (arquitectura)
 Reorganizado siguiendo `flutter-apply-architecture-best-practices`:
 - **`OverpassService`** (data/services): "puro", solo habla con la API (endpoint principal +
