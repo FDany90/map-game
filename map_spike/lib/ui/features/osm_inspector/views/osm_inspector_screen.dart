@@ -6,11 +6,13 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../../config/app_config.dart';
 import '../../../../data/repositories/osm_scene_repository.dart';
+import '../../../../data/services/nominatim_service.dart';
 import '../../../../data/services/overpass_service.dart';
 import '../../../../domain/models/osm_feature.dart';
 import '../../../../domain/models/osm_scene.dart';
 import '../../../../domain/models/streets_source.dart';
 import '../../../../domain/models/zone_profile.dart';
+import '../../combat_scene/views/combat_scene_screen.dart';
 import '../view_models/osm_inspector_view_model.dart';
 
 /// Inspector OSM interactivo (Fase 1, ADR 0007): **tocás un punto en el mapa** y
@@ -39,6 +41,7 @@ class OsmInspectorScreen extends StatefulWidget {
 class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
   late final OsmInspectorViewModel _viewModel = OsmInspectorViewModel(
     repository: OsmSceneRepository(overpass: OverpassService()),
+    nominatim: NominatimService(),
     initialCenter: widget.initialCenter,
   );
 
@@ -74,6 +77,24 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
               // Panel de datos del punto consultado.
               Expanded(flex: 4, child: _panel()),
             ],
+          );
+        },
+      ),
+      floatingActionButton: ListenableBuilder(
+        listenable: _viewModel,
+        builder: (context, _) {
+          final scene = _viewModel.scene;
+          if (scene == null) return const SizedBox.shrink();
+          // Genera la escena de combate (Fase 2) con el punto consultado.
+          return FloatingActionButton.extended(
+            backgroundColor: Colors.deepOrange,
+            icon: const Icon(Icons.videogame_asset),
+            label: const Text('Ver escena'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CombatSceneScreen(scene: scene),
+              ),
+            ),
           );
         },
       ),
@@ -291,7 +312,7 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('ZONA INFERIDA (contexto 200 m)',
+                    const Text('ZONA INFERIDA',
                         style: TextStyle(color: Colors.white54, fontSize: 10)),
                     Text(z.character.label,
                         style: const TextStyle(
@@ -327,6 +348,7 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
         ZoneCharacter.openGreen => Icons.park,
         ZoneCharacter.roadCorridor => Icons.add_road,
         ZoneCharacter.rural => Icons.grass,
+        ZoneCharacter.emptyArea => Icons.landscape,
         ZoneCharacter.unknown => Icons.help_outline,
       };
 
@@ -336,6 +358,7 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
         ZoneCharacter.openGreen => Colors.greenAccent,
         ZoneCharacter.roadCorridor => Colors.orangeAccent,
         ZoneCharacter.rural => Colors.limeAccent,
+        ZoneCharacter.emptyArea => Colors.tealAccent,
         ZoneCharacter.unknown => Colors.blueGrey,
       };
 
@@ -345,13 +368,41 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
       StreetsSource.cache => 'caché local (OSM)',
       StreetsSource.fallback => 'fallback',
     };
+    final addr = _viewModel.address;
     return _card('Punto consultado', [
-      Text(
-        '${scene.center.latitude.toStringAsFixed(5)}, '
-        '${scene.center.longitude.toStringAsFixed(5)}  ·  '
-        'radio ${scene.radiusMeters.round()} m',
-        style: const TextStyle(color: Colors.white70, fontSize: 12),
+      // Dirección (calle + altura) para ubicarlo / cotejar en Google Maps.
+      Row(
+        children: [
+          const Icon(Icons.place, color: Colors.redAccent, size: 16),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              addr?.streetLine ?? 'Buscando dirección…',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
+      if (addr?.suburb != null || addr?.city != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 2, left: 22),
+          child: Text(
+            [addr?.suburb, addr?.city].where((e) => e != null).join(', '),
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+        ),
+      const SizedBox(height: 8),
+      SelectableText(
+        '${scene.center.latitude.toStringAsFixed(6)}, '
+        '${scene.center.longitude.toStringAsFixed(6)}',
+        style: const TextStyle(
+            color: Colors.white70, fontSize: 12, fontFamily: 'monospace'),
+      ),
+      Text('radio ${scene.radiusMeters.round()} m',
+          style: const TextStyle(color: Colors.white38, fontSize: 11)),
       const SizedBox(height: 8),
       Row(
         children: [

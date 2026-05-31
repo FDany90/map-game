@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-05-31** (Inspector OSM interactivo — Fase 1 del generador de escenas, ADR 0007)
+> Última actualización: **2026-05-31** (Inspector OSM + **Fase 2: escena de combate generada desde OSM** — ADR 0007)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -69,9 +69,17 @@ App Flutter que ya corre en emulador Android:
 - **Inspector OSM interactivo (FAB azul 🔵 `travel_explore`):** abre **donde está mirando el
   mapa real** (navegás con zoom/scroll, incluso a otro país, y lo inspeccionás ahí); **tocás
   un punto → consulta Overpass en vivo** (con caché) y dibuja **sobre el mapa real** las calles,
-  edificios y áreas (leisure) de ese punto, con conteos y **cobertura de tags**. Radio 50/100/150 m
-  (50 = "solo mi calle"). Es la **Fase 1 del generador de escenas** del ADR 0007 (la materia prima
-  para la escena isométrica 2.5D).
+  edificios y áreas (leisure) de ese punto, con conteos y **cobertura de tags**. Radio 100/150/200 m.
+  Muestra además **zona inferida** (`ZoneProfile`) y la **calle + altura** del punto (Nominatim
+  reverse geocoding) con lat/lon copiables para chequear en Google Maps. Es la **Fase 1 del
+  generador de escenas** del ADR 0007 (la materia prima para la escena de combate).
+- **Escena de combate (preview) — FAB naranja "Ver escena" en el Inspector:** **Fase 2** del ADR
+  0007. Render **top-down con profundidad falsa** (CustomPainter; migra a Flame al meter personajes)
+  generado por código desde el punto OSM: **calle principal rotada SIEMPRE a vertical**, edificios
+  extruidos (paredes + sombra) como bordes del corredor, **brújula** con el norte real, y
+  **carve-out** de las calles transversales (esquinas despejadas). Las **paredes son siempre
+  procedurales** (los footprints reales de OSM están a media cuadra y dispersos → se usan solo como
+  **señal**: cantidad→densidad, pisos declarados→altura). Determinista por posición. 34 tests verdes.
 - (En commits previos también se probó: oleada de zombies + torreta con FPS — combate.)
 
 ### Cómo correrlo
@@ -215,12 +223,22 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       los **tags son desparejos por zona** → `width` casi nunca viene (calcular de `highway`+`lanes`),
       `height` 0% en Palermo pero ~95% en microcentro, `roof:shape` ≈ inútil hoy. **Defaults/inferencia
       robustos = el grueso del trabajo** del generador.
-    - ⬜ **Fase 2 (próxima) — render isométrico 2.5D en Flame:** tomar el punto y dibujar la escena
-      **por código** (cajas extruidas por `building:levels` + cintas de calle orientadas al norte
-      real), **cero assets**, reusando la proyección lat/lon→metros. **Decisión visual (2026-05-31):**
-      **código primero, assets después** — la *estructura* (edificios/calles) se genera por código;
-      los *sprites/texturas* (props, zombies, paredes) vendrán de un **asset pack CC0 (Kenney)** o
-      artista en la Fase 3, no se "generan" en el chat. La IA de imágenes queda para props puntuales.
+    - ✅ **Fase 2 HECHA (2026-05-31) — escena de combate por código:** `domain/models/combat_scene_layout.dart`
+      (lógica pura, determinista) proyecta lat/lon→metros, **rota la calle principal a vertical**
+      (`rot = π/2 − ángulo`), genera las **paredes siempre proceduralmente** a ambos lados, hace
+      **carve-out** de cruces (esquinas despejadas) y expone el **norte real** para la brújula. Render
+      `ui/features/combat_scene/` (CustomPainter top-down: paredes extruidas + sombra + brújula).
+      `flutter analyze` limpio; **34 tests** (7 del layout, incl. regresión "denso urbano con
+      edificios reales igual genera paredes — no queda vacío"). Verificado en emulador.
+      **Decisión clave (paredes procedurales):** los footprints reales de OSM están a media cuadra y
+      agrupados a un lado → como "paredes" del corredor servían mal (escena vacía aun con 12-39
+      edificios reales). Se usan solo como **señal** (cantidad→densidad, `building:levels`/`height`→altura);
+      el dibujo es generado y determinista por posición. Ver [17-inferencia-morfologia-urbana.md](17-inferencia-morfologia-urbana.md).
+    - ⬜ **Fase 3 (próxima) — assets + Flame con personajes:** **código primero, assets después** — la
+      *estructura* (edificios/calles) ya se genera por código; los *sprites/texturas* (props, zombies,
+      paredes) vendrán de un **asset pack CC0 (Kenney)** o artista, no se "generan" en el chat. Migrar
+      el preview (CustomPainter) a Flame con personajes "billboard" en movimiento, reusando el mismo
+      `CombatSceneLayout`. Selección de escena con **preferencia por esquinas** (ADR 0007 rev).
 12. **Pathfinding del personaje a un punto (ascenso a L2):** mandar mi personaje por las **calles
     reales** a un destino (zombies/dungeon) con **tiempo según la distancia real**. Falta `RoadGraph`
     (grafo: intersecciones = nodos compartidos en OSM) + A\*; el "caminar" (`_advance`) ya existe.

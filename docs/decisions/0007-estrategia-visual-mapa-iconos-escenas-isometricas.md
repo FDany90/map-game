@@ -1,12 +1,51 @@
 # ADR 0007 — Estrategia visual: mapa top-down con iconos + escenas isométricas generadas desde OSM
 
-> Estado: **aceptada** · 2026-05-30
+> Estado: **aceptada** · 2026-05-30 · **revisada 2026-05-31** (ver "Revisión" abajo)
 > Relacionada con: [0001](0001-stack-flutter-flame.md) (Flutter+Flame),
 > [0004](0004-tiles-raster-estilizados.md) (tiles raster),
 > [0006](0006-mapa-flutter-map-flame-combate.md) (flutter_map; Flame para combate).
 > Docs: [12-building-extrusion.md](../12-building-extrusion.md) ·
 > [13-modos-pantallas-backlog.md](../13-modos-pantallas-backlog.md) ·
-> [14-osm-datos-referencia.md](../14-osm-datos-referencia.md).
+> [14-osm-datos-referencia.md](../14-osm-datos-referencia.md) ·
+> [17-inferencia-morfologia-urbana.md](../17-inferencia-morfologia-urbana.md).
+
+> ## ⚠️ Revisión 2026-05-31 (escena de combate — manda sobre lo de abajo)
+> Tras analizar **assets 2D + aspect ratio del celular + cómo se ve un personaje**,
+> se revisan varios puntos, **solo para la escena de combate** (el mapa sigue igual:
+> top-down con iconos):
+>
+> 1. **Piso/escenario: top-down con "profundidad falsa"**, NO isométrico puro. Vista
+>    cenital con edificios **levemente extruidos** + **sombras largas** (sensación 2.5D).
+>    Motivo: el isométrico tiene la **perspectiva horneada** en cada sprite → no se rota a
+>    un ángulo arbitrario y obliga a sets por dirección. El top-down se **rota a cualquier
+>    grado** sin romperse → viable para dev solo y para arte generado.
+> 2. **Personajes (jugador/zombies): sprites "billboard" de frente** parados sobre el piso,
+>    con **sombra elíptica** que los ancla. NO se dibujan desde arriba (la coronilla no se
+>    lee). Patrón de Enter the Gungeon / Binding of Isaac / Survivor.io / Vampire Survivors.
+>    Como el billboard siempre mira a cámara, **no se rompe al rotar la calle**. (Esto ya
+>    estaba en el ADR; se mantiene. Lo que cambia es solo el piso: iso → top-down.)
+> 3. **Orientación: la calle principal se rota SIEMPRE a VERTICAL** (eje largo del cel).
+>    Descartado "diagonal" y "norte real" para el combate. Motivo: la visión es **calle al
+>    ~80% de la pantalla** con edificios como **borde decorativo** a los costados → una calle
+>    horizontal en cel vertical desaprovecha la pantalla. El **norte real** se conserva como
+>    **dato** y se muestra con una **brújula** en la escena (continuidad sin perder jugabilidad).
+> 4. **Escenarios preferidos: ESQUINAS y calles verticales.** La esquina es el mejor
+>    escenario (calle vertical de eje + transversal entrando horizontal a los costados → da
+>    profundidad y juego lateral). Una recta sola es más "pasillo". Regla de generación: si
+>    el punto cae en cruce/esquina → usarla; si cae en recta → **buscar la esquina más cercana**
+>    dentro del hexágono (determinista por `hexId`).
+> 5. **Paredes del corredor: SIEMPRE procedurales** (no los footprints reales de OSM). Al
+>    renderizar la Fase 2 se vio que los edificios reales están **a media cuadra y agrupados a
+>    un lado** → como paredes del corredor servían mal (escena **vacía** aun con 12-39 edificios
+>    reales). Se usan solo como **señal**: cantidad→densidad, `building:levels`/`height`→altura.
+>    El dibujo es generado y **determinista por posición**, con **carve-out** de cruces (esquinas
+>    despejadas). El híbrido (real + relleno) se reserva para un render fiel al mapa (Nivel 3),
+>    no para el combate. Detalle en [17-inferencia-morfologia-urbana.md](../17-inferencia-morfologia-urbana.md).
+>
+> En consecuencia, la sección "2. Escena ISOMÉTRICA 2.5D" y "Orientación: preservar el NORTE
+> REAL (opción b)" de abajo quedan **superadas para el combate** por esta revisión. El resto
+> del ADR (mapa con iconos, generación procedural desde OSM, continuidad mapa↔escena) sigue
+> vigente. Estilo de arte: **código primero** (cero assets), luego pack CC0 (Kenney).
 
 ## Contexto
 Surgió la pregunta de cómo mostrar monstruos, edificios y personajes, y si el mapa podía verse
@@ -48,11 +87,13 @@ La escena de combate/base se construye con los **atributos reales** de OSM (vía
     real. "Se siente mi esquina" sin renderizar geometría exacta.
   - **Nivel 3 (evolución):** dibujar polylines y footprints reales en isométrico, fiel.
 
-### Orientación: preservar el NORTE REAL (opción b)
-La escena **respeta el ángulo verdadero** de las calles (no se rota para "acomodarlas" a un eje
+### Orientación: ~~preservar el NORTE REAL (opción b)~~ → SUPERADA (ver Revisión 2026-05-31)
+> ⚠️ **Reemplazada para el combate por "calle siempre vertical + brújula"** (ver Revisión arriba).
+> Se mantiene el texto original como registro de la decisión previa.
+
+~~La escena **respeta el ángulo verdadero** de las calles (no se rota para "acomodarlas" a un eje
 isométrico cómodo). Prioriza **realismo y continuidad** mapa↔combate: la calle corre en su
-dirección real; una avenida vertical se ve vertical. (Trade-off aceptado: a veces menos "cómodo"
-visualmente que rotar, pero más fiel — que es el alma del proyecto.)
+dirección real; una avenida vertical se ve vertical.~~
 
 ## Continuidad mapa ↔ escena
 Tocar un hexágono entra a **ese** punto real: misma calle, mismo tipo, misma dirección, mismos

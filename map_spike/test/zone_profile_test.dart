@@ -111,9 +111,10 @@ void main() {
       expect(p.character, ZoneCharacter.rural);
     });
 
-    test('escena vacía → indeterminado', () {
+    test('escena totalmente vacía → vacío / sin datos (no error)', () {
+      // Mar, desierto, bosque sin caminos: nada mapeado es info válida.
       final p = ZoneProfile.fromScene(_scene(const []));
-      expect(p.character, ZoneCharacter.unknown);
+      expect(p.character, ZoneCharacter.emptyArea);
       expect(p.streetLengthMeters, 0);
     });
 

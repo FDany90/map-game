@@ -15,6 +15,7 @@ enum ZoneCharacter {
   openGreen('Parque / abierto', 'verde, árboles, pocos edificios'),
   roadCorridor('Ruta / corredor', 'una calle cruzando, casi sin construcción'),
   rural('Rural / descampado', 'casas dispersas, mucho terreno'),
+  emptyArea('Vacío / sin datos', 'agua, desierto o bosque — nada mapeado'),
   unknown('Indeterminado', 'datos insuficientes');
 
   const ZoneCharacter(this.label, this.hint);
@@ -152,7 +153,11 @@ class ZoneProfile {
 
     // 1) Sin ninguna calle.
     if (streetCount == 0) {
-      return hasGreen ? ZoneCharacter.openGreen : ZoneCharacter.unknown;
+      if (hasGreen) return ZoneCharacter.openGreen;
+      // Nada mapeado (ni calles, ni verde, ni edificios): mar, desierto, bosque
+      // sin caminos. Es info válida (zona vacía), no un error. Ver doc 17.
+      if (!hasBuildings) return ZoneCharacter.emptyArea;
+      return ZoneCharacter.unknown;
     }
 
     // 2) Parque / abierto: hay verde y dominan los senderos peatonales, con

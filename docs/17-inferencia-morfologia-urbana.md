@@ -49,17 +49,18 @@ Como las calles sí vienen, se deduce la morfología:
 - 🌊 **Costa / agua:** `natural=water`, `waterway`, línea de costa.
 - 🏟️ **Plaza / equipamiento:** `amenity` o `leisure` puntuales dominantes.
 
-## Radio de CLASIFICACIÓN ≠ radio de la ESCENA (decisión 2026-05-31)
-Son dos cosas distintas y usan radios distintos:
+## Radio de consulta: UNA sola (decisión 2026-05-31, revisada)
+Una sola consulta de **~150 m** (default; ajustable 100/200 m) alcanza para **ambas
+cosas a la vez** y de los **mismos datos**:
+- **clasificar la zona** (mirar las calles del entorno: trama vs. pasto), y
+- **representar** la escena (dibujar la calle/manzana del punto tocado).
 
-| Concepto | Radio | Para qué |
-|---|---|---|
-| **Clasificación de zona** | **~200 m** (contexto) | decidir *qué tipo* de barrio es. Necesita ver alrededor: una avenida sola a 50 m es ambigua; a 200 m se ve si hay **trama** (ciudad) o sólo **pasto** (ruta/rural). |
-| **Escena de combate** | **~50-100 m** | lo que se **dibuja y se juega**: tu calle / avenida / parche de parque (recorrido < 100 m). |
-
-El Inspector hace **dos consultas** (ambas cacheadas): la fina (chips 50/100/150 m) para
-el overlay/stats, y una de **200 m sólo para clasificar**. Así el carácter de la cuadra lo
-define el barrio que la rodea, pero la escena sigue siendo chica (encaja con ADR 0007).
+> Se descartó la idea previa de **dos consultas** (una fina para dibujar + una de 200 m
+> para clasificar): duplicaba las llamadas a OSM sin beneficio real — 150 m ya da
+> contexto suficiente para concluir la categoría, y la calle del punto se extrae del
+> mismo subconjunto ya descargado. Menos red, más simple. (Si en el futuro la escena de
+> combate necesita un recorte más chico, se **filtra en cliente** sobre la escena ya
+> traída, sin otra consulta.)
 
 ## Pipeline de generación (con y sin edificios)
 1. **Traer la escena** (ya hecho: `OsmSceneRepository`).
@@ -70,9 +71,31 @@ define el barrio que la rodea, pero la escena sigue siendo chica (encaja con ADR
    - franja de "lote" pegada a la calle, subdividida en parcelas;
    - cada parcela → un edificio (alto si denso, casa si residencial);
    - parques/abierto → sin edificios, con vegetación.
-5. **Si hay footprints reales de OSM → usarlos** (son la verdad); **los huecos** se
-   completan con edificios inferidos. Híbrido: real donde existe, inferido donde no.
-6. **Extruir** todo a isométrico (cajas por nº de pisos), **norte real** (ADR 0007).
+5. **Generar las paredes del corredor** (ver "Paredes procedurales" abajo).
+6. **Extruir** todo (cajas por nº de pisos), top-down con profundidad falsa (ADR 0007 rev).
+
+## Paredes procedurales (decisión Fase 2, 2026-05-31)
+Al renderizar la escena de combate real se descubrió que **usar los footprints reales
+de OSM como "paredes" del corredor no funciona**, ni siquiera cuando OSM **sí** trae
+edificios:
+
+> Probado en Palermo: puntos "denso urbano" con **12 y 39 edificios reales** → la escena
+> salía **casi vacía**. Motivo: los footprints están **a media cuadra** y **agrupados a un
+> lado** (a ~80-100 m del punto tocado), fuera del encuadre del corredor (~70 m); y como
+> había ≥6 reales, el relleno inferido se **salteaba** → doble vacío.
+
+**Decisión:** para el **corredor jugable**, las paredes son **siempre procedurales** —
+alineadas a ambos lados de la calle vertical, deterministas por posición. Los edificios
+reales de OSM se usan **solo como señal**, no como dibujo:
+- **cantidad de edificios reales → densidad** del corredor (menos huecos si OSM trae muchos);
+- **`building:levels`/`height` declarados → altura** de las paredes (si nadie declara, altura por zona).
+
+Además se hace **carve-out de cruces**: si un lote pisa una calle transversal, se omite →
+la **intersección queda despejada** (las esquinas son los escenarios clave del ADR 0007 rev).
+
+> 🔭 El enfoque **híbrido** (dibujar footprints reales donde están + rellenar huecos) se
+> reserva para un eventual **render fiel al mapa** (Nivel 3 del ADR 0007), no para el
+> corredor de combate, donde la jugabilidad pide paredes limpias y consistentes.
 
 ## Regla de oro: determinismo (no random por frame)
 La inferencia **no puede ser aleatoria cada vez** (rompería continuidad y la economía

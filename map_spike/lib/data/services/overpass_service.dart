@@ -97,9 +97,11 @@ class OverpassService {
             receiveTimeout: const Duration(seconds: 25),
           ),
         );
-        final features = _parseFeatures(resp.data);
-        if (features.isNotEmpty) return features;
-        lastError = 'respuesta vacía';
+        // La consulta corrió OK: devolvemos lo que haya, **incluso vacío**. Un
+        // punto en el mar/desierto/bosque sin caminos legítimamente no trae
+        // nada — eso es información (zona vacía), no un error. El error se
+        // reserva para cuando NINGÚN endpoint responde (red caída).
+        return _parseFeatures(resp.data);
       } catch (e) {
         lastError = e;
         debugPrint('OverpassService.fetchScene: falló $endpoint → $e');

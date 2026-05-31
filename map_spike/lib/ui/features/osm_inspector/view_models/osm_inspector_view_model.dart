@@ -3,6 +3,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../../config/app_config.dart';
 import '../../../../data/repositories/osm_scene_repository.dart';
+import '../../../../data/services/nominatim_service.dart';
 import '../../../../domain/models/osm_feature.dart';
 import '../../../../domain/models/osm_scene.dart';
 import '../../../../domain/models/zone_profile.dart';
@@ -12,69 +13,77 @@ import '../../../../domain/models/zone_profile.dart';
 /// en tiempo real (calles + edificios + áreas con sus tags). Es el ensayo del
 /// principio del ADR 0007: "tocás tu esquina → la escena es tu esquina".
 ///
-/// El **radio** es chico por defecto (50 m = "solo mi calle principal"); se puede
-/// abrir a 100/150 m para ver las cuadras de alrededor.
+/// El **radio** por defecto es 150 m: suficiente para concluir la categoría de
+/// zona y, de la **misma** escena, representar la calle del punto tocado. Una
+/// sola consulta a OSM (clasificar + dibujar salen de los mismos datos).
 class OsmInspectorViewModel extends ChangeNotifier {
   OsmInspectorViewModel({
     required OsmSceneRepository repository,
+    required NominatimService nominatim,
     LatLng? initialCenter,
-    this.radiusMeters = 50,
+    this.radiusMeters = 150,
   })  : _repo = repository,
+        _nominatim = nominatim, // ignore: prefer_initializing_formals
         _center = initialCenter ?? AppConfig.initialCenter {
     _load();
   }
 
   final OsmSceneRepository _repo;
+  final NominatimService _nominatim;
 
-  /// Radios disponibles para la **escena** (lo que se dibuja/juega):
-  /// 50 = "solo mi calle"; 100/150 = ver más alrededor.
-  static const List<double> radiusOptions = [50, 100, 150];
-
-  /// Radio de **contexto** para CLASIFICAR la zona (no para dibujar). Más grande
-  /// que la escena a propósito: clasificar bien necesita ver el barrio alrededor
-  /// (una avenida sola a 50 m es ambigua; a 200 m se ve si hay trama o sólo
-  /// pasto). La escena de combate sigue siendo chica (<100 m). Ver doc 17.
-  static const double classificationRadius = 200;
+  /// Radios disponibles. 150 m (default) ya alcanza para clasificar; 100/200 m
+  /// para ajustar contexto. Con el mismo radio se clasifica Y se dibuja.
+  static const List<double> radiusOptions = [100, 150, 200];
 
   LatLng _center;
   double radiusMeters;
 
   bool _loading = true;
   String? _error;
-  OsmScene? _scene; // escena fina (radio de chips): overlay + stats
-  OsmScene? _context; // contexto 200 m: sólo para clasificar la zona
+  OsmScene? _scene;
+  PlaceAddress? _address;
+  int _loadSeq = 0; // descarta respuestas de geocoding viejas (taps rápidos)
 
   bool get loading => _loading;
   String? get error => _error;
   OsmScene? get scene => _scene;
   LatLng get center => _center;
 
+  /// Dirección (calle + altura) del punto, para ubicarlo y cotejar en Google
+  /// Maps. Llega un instante después de la escena (reverse geocoding aparte).
+  PlaceAddress? get address => _address;
+
   /// Carácter urbano inferido del punto (denso/casas/parque/ruta/rural). Se
-  /// calcula sobre el **contexto de 200 m** (no sobre la escena fina) porque OSM
-  /// casi nunca trae edificios y el tipo de barrio se lee del entorno (doc 17).
+  /// calcula sobre la **misma** escena consultada (OSM casi nunca trae edificios,
+  /// el tipo de barrio se lee de las calles del entorno; ver doc 17).
   ZoneProfile? get zone =>
-      _context == null ? null : ZoneProfile.fromScene(_context!);
+      _scene == null ? null : ZoneProfile.fromScene(_scene!);
 
   Future<void> _load() async {
+    final seq = ++_loadSeq;
     _loading = true;
     _error = null;
+    _address = null;
     notifyListeners();
     try {
-      // Dos consultas (ambas cacheadas en disco): la escena fina que se dibuja
-      // y el contexto amplio que sólo sirve para clasificar la zona.
-      final results = await Future.wait([
-        _repo.getSceneAround(_center, radiusMeters: radiusMeters),
-        _repo.getSceneAround(_center, radiusMeters: classificationRadius),
-      ]);
-      _scene = results[0];
-      _context = results[1];
+      // Una sola consulta a OSM (cacheada en disco): de acá salen tanto la
+      // clasificación de zona como el overlay/stats que se dibujan.
+      _scene = await _repo.getSceneAround(_center, radiusMeters: radiusMeters);
     } catch (e) {
       _error = '$e';
       _scene = null;
-      _context = null;
     } finally {
       _loading = false;
       notifyListeners();
+    }
+    // Dirección del punto: servicio aparte (Nominatim), bajo demanda, no bloquea
+    // la escena y si falla no es crítico. Solo aplica si sigue siendo el tap actual.
+    if (seq == _loadSeq && _error == null) {
+      final addr = await _nominatim.reverse(_center);
+      if (seq == _loadSeq) {
+        _address = addr;
+        notifyListeners();
+      }
     }
   }
 
