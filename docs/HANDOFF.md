@@ -141,6 +141,7 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 - [14-osm-datos-referencia.md](14-osm-datos-referencia.md) — OSM/Overpass: atributos para escenas, costo/conectividad, caché
 - [15-placement-bases-vecinos.md](15-placement-bases-vecinos.md) — anti-solapamiento de bases de vecinos (grilla + clustering)
 - [16-modelo-hexagonos-bd.md](16-modelo-hexagonos-bd.md) — BD de hexágonos: generación lazy (sparse, se materializa al jugar)
+- [17-inferencia-morfologia-urbana.md](17-inferencia-morfologia-urbana.md) — generar la escena cuando OSM **no trae edificios** (inferir zona desde calles + rellenar manzanas, determinista)
 - [spike-01-maptiler-flutter.md](spike-01-maptiler-flutter.md) — guía del spike
 - [decisions/](decisions/) — ADRs 0001-0007
 

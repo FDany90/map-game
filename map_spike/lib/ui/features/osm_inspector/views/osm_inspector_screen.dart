@@ -10,6 +10,7 @@ import '../../../../data/services/overpass_service.dart';
 import '../../../../domain/models/osm_feature.dart';
 import '../../../../domain/models/osm_scene.dart';
 import '../../../../domain/models/streets_source.dart';
+import '../../../../domain/models/zone_profile.dart';
 import '../view_models/osm_inspector_view_model.dart';
 
 /// Inspector OSM interactivo (Fase 1, ADR 0007): **tocás un punto en el mapa** y
@@ -250,6 +251,8 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        _zoneCard(),
+        const SizedBox(height: 10),
         _summaryCard(scene),
         const SizedBox(height: 10),
         _streetsCard(scene),
@@ -260,6 +263,81 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
       ],
     );
   }
+
+  /// Cartel destacado: el carácter de zona INFERIDO (lo que se dibujaría cuando
+  /// OSM no trae edificios). Es la heurística del doc 17 a prueba con datos reales.
+  Widget _zoneCard() {
+    final z = _viewModel.zone;
+    if (z == null) return const SizedBox.shrink();
+    final color = _zoneColor(z.character);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: 0.28), color.withValues(alpha: 0.08)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_zoneIcon(z.character), color: color, size: 28),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ZONA INFERIDA (contexto 200 m)',
+                        style: TextStyle(color: Colors.white54, fontSize: 10)),
+                    Text(z.character.label,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('Se dibujaría: ${z.character.hint}',
+              style: TextStyle(color: color, fontSize: 12)),
+          const SizedBox(height: 8),
+          Text(
+            'señales:  avenidas ${z.majorRoads} · residenciales ${z.residentialRoads}'
+            ' · senderos ${z.pedestrianPaths} · otras ${z.minorRoads}\n'
+            'densidad ${z.streetDensity.round()} m/ha'
+            ' · ${z.streetLengthMeters.round()} m de calle'
+            ' · edificios ${z.hasBuildings ? "sí" : "no"}'
+            ' · verde ${z.hasGreen ? "sí" : "no"}',
+            style: const TextStyle(color: Colors.white60, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _zoneIcon(ZoneCharacter c) => switch (c) {
+        ZoneCharacter.denseUrban => Icons.location_city,
+        ZoneCharacter.residential => Icons.house,
+        ZoneCharacter.openGreen => Icons.park,
+        ZoneCharacter.roadCorridor => Icons.add_road,
+        ZoneCharacter.rural => Icons.grass,
+        ZoneCharacter.unknown => Icons.help_outline,
+      };
+
+  Color _zoneColor(ZoneCharacter c) => switch (c) {
+        ZoneCharacter.denseUrban => Colors.deepOrangeAccent,
+        ZoneCharacter.residential => Colors.amberAccent,
+        ZoneCharacter.openGreen => Colors.greenAccent,
+        ZoneCharacter.roadCorridor => Colors.orangeAccent,
+        ZoneCharacter.rural => Colors.limeAccent,
+        ZoneCharacter.unknown => Colors.blueGrey,
+      };
 
   Widget _summaryCard(OsmScene scene) {
     final src = switch (scene.source) {
