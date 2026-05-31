@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../domain/models/osm_feature.dart';
+
 /// Error al consultar Overpass (todos los endpoints fallaron).
 class OverpassException implements Exception {
   OverpassException(this.message, [this.cause]);
@@ -64,6 +66,75 @@ class OverpassService {
       }
     }
     throw OverpassException('no se pudieron obtener calles', lastError);
+  }
+
+  /// Trae la **escena cruda** (calles + edificios + áreas/leisure) con sus
+  /// **tags y geometría** dentro de [radiusMeters] de [center]. A diferencia de
+  /// [fetchStreetsAround], conserva los tags (son los parámetros de generación
+  /// de la escena isométrica; ver ADR 0007 / `docs/14-osm-datos-referencia.md`).
+  /// Lanza [OverpassException] si todos los endpoints fallan.
+  Future<List<OsmFeature>> fetchSceneAround(
+    LatLng center, {
+    double radiusMeters = 150,
+  }) async {
+    final c = '${center.latitude},${center.longitude}';
+    final query = '[out:json][timeout:25];'
+        '(way["highway"](around:$radiusMeters,$c);'
+        'way["building"](around:$radiusMeters,$c);'
+        'way["leisure"](around:$radiusMeters,$c););'
+        'out geom;';
+    final encoded = Uri.encodeQueryComponent(query);
+
+    Object? lastError;
+    for (final endpoint in _endpoints) {
+      try {
+        final resp = await _dio.get<Map<String, dynamic>>(
+          '$endpoint?data=$encoded',
+          options: Options(
+            responseType: ResponseType.json,
+            headers: const {'User-Agent': _userAgent},
+            sendTimeout: const Duration(seconds: 25),
+            receiveTimeout: const Duration(seconds: 25),
+          ),
+        );
+        final features = _parseFeatures(resp.data);
+        if (features.isNotEmpty) return features;
+        lastError = 'respuesta vacía';
+      } catch (e) {
+        lastError = e;
+        debugPrint('OverpassService.fetchScene: falló $endpoint → $e');
+      }
+    }
+    throw OverpassException('no se pudo obtener la escena', lastError);
+  }
+
+  /// Parsea la respuesta de Overpass (`out geom`) preservando tags + geometría.
+  List<OsmFeature> _parseFeatures(Map<String, dynamic>? data) {
+    final elements = (data?['elements'] as List?) ?? const [];
+    final out = <OsmFeature>[];
+    for (final e in elements) {
+      if (e is! Map) continue;
+      final geom = e['geometry'];
+      if (geom is! List || geom.length < 2) continue;
+      final pts = <LatLng>[
+        for (final g in geom)
+          if (g is Map && g['lat'] != null && g['lon'] != null)
+            LatLng((g['lat'] as num).toDouble(), (g['lon'] as num).toDouble()),
+      ];
+      if (pts.length < 2) continue;
+      final tags = <String, String>{};
+      final rawTags = e['tags'];
+      if (rawTags is Map) {
+        rawTags.forEach((k, v) => tags[k.toString()] = v.toString());
+      }
+      out.add(OsmFeature(
+        id: (e['id'] as num?)?.toInt() ?? 0,
+        kind: OsmFeature.kindFromTags(tags),
+        tags: tags,
+        geometry: pts,
+      ));
+    }
+    return out;
   }
 
   /// Parsea la respuesta de Overpass (`out geom`) a una lista de polylines.

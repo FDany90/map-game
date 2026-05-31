@@ -9,6 +9,7 @@ import '../../../../config/app_config.dart';
 import '../../../../data/repositories/territory_repository.dart';
 import '../../../../data/services/hex_grid_service.dart';
 import '../../../../domain/models/claim_result.dart';
+import '../../osm_inspector/views/osm_inspector_screen.dart';
 import '../../zombies/views/zombie_spike_screen.dart';
 import '../view_models/map_view_model.dart';
 import 'widgets/economy_hud.dart';
@@ -172,6 +173,28 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
             child: const Icon(Icons.pest_control),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton(
+            heroTag: 'osm',
+            mini: true,
+            backgroundColor: Colors.blue.shade700,
+            // Fase 1 (ADR 0007): inspector de datos OSM crudos del punto.
+            onPressed: () {
+              // Abrir el inspector donde está mirando el mapa real: navegás a
+              // otro lugar/país y lo inspeccionás ahí mismo (ADR 0007).
+              final cam = _mapController.camera;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => OsmInspectorScreen(
+                    tileStore: widget.tileStore,
+                    initialCenter: cam.center,
+                    initialZoom: cam.zoom,
+                  ),
+                ),
+              );
+            },
+            child: const Icon(Icons.travel_explore),
           ),
           const SizedBox(height: 8),
           FloatingActionButton(

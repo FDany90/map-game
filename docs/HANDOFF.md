@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-05-30** (caché de tiles + arquitectura por capas + botón cerrar + skill de UI)
+> Última actualización: **2026-05-31** (Inspector OSM interactivo — Fase 1 del generador de escenas, ADR 0007)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -66,6 +66,12 @@ App Flutter que ya corre en emulador Android:
 - **Arquitectura por capas (MVVM):** `domain/` (modelos) · `data/` (servicios + repositorios) ·
   `ui/features/map/` (ViewModel + views). La economía vive en `TerritoryRepository` (testeable).
   Ver [03-architecture.md](03-architecture.md).
+- **Inspector OSM interactivo (FAB azul 🔵 `travel_explore`):** abre **donde está mirando el
+  mapa real** (navegás con zoom/scroll, incluso a otro país, y lo inspeccionás ahí); **tocás
+  un punto → consulta Overpass en vivo** (con caché) y dibuja **sobre el mapa real** las calles,
+  edificios y áreas (leisure) de ese punto, con conteos y **cobertura de tags**. Radio 50/100/150 m
+  (50 = "solo mi calle"). Es la **Fase 1 del generador de escenas** del ADR 0007 (la materia prima
+  para la escena isométrica 2.5D).
 - (En commits previos también se probó: oleada de zombies + torreta con FPS — combate.)
 
 ### Cómo correrlo
@@ -195,6 +201,25 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
     [decisions/0007-estrategia-visual-mapa-iconos-escenas-isometricas.md](decisions/0007-estrategia-visual-mapa-iconos-escenas-isometricas.md)
     + [14-osm-datos-referencia.md](14-osm-datos-referencia.md). **Overpass es gratis/sin key**
     (fair-use); en producción va **detrás del backend** (Etapa 6), no llamado por cada jugador.
+    - ✅ **Fase 1 HECHA (2026-05-31) — Inspector OSM:** se preservan los **tags** (antes las
+      calles los descartaban): `domain/models/osm_feature.dart` (geometría + tags + bearing real
+      calculado) + `osm_scene.dart`; `OverpassService.fetchSceneAround` (query combinada
+      `highway`+`building`+`leisure`, conserva tags) + `OsmSceneRepository` (caché en disco, patrón
+      `StreetsRepository`, sin fallback sintético); feature `ui/features/osm_inspector/`
+      (mapa interactivo, tap→consulta en vivo, overlay sobre mapa real, radio 50/100/150 m).
+      Verificado en emulador; `flutter analyze` limpio; 13 tests (8 previos + 5 de `OsmFeature`).
+      **Gotcha:** `latlong2` exporta una clase `Path` que pisa la de Flutter en `CustomPainter` →
+      importar con `hide Path`.
+    - 📊 **Hallazgos de datos (sondeo Palermo/microcentro):** la **geometría es 100% confiable**;
+      los **tags son desparejos por zona** → `width` casi nunca viene (calcular de `highway`+`lanes`),
+      `height` 0% en Palermo pero ~95% en microcentro, `roof:shape` ≈ inútil hoy. **Defaults/inferencia
+      robustos = el grueso del trabajo** del generador.
+    - ⬜ **Fase 2 (próxima) — render isométrico 2.5D en Flame:** tomar el punto y dibujar la escena
+      **por código** (cajas extruidas por `building:levels` + cintas de calle orientadas al norte
+      real), **cero assets**, reusando la proyección lat/lon→metros. **Decisión visual (2026-05-31):**
+      **código primero, assets después** — la *estructura* (edificios/calles) se genera por código;
+      los *sprites/texturas* (props, zombies, paredes) vendrán de un **asset pack CC0 (Kenney)** o
+      artista en la Fase 3, no se "generan" en el chat. La IA de imágenes queda para props puntuales.
 12. **Pathfinding del personaje a un punto (ascenso a L2):** mandar mi personaje por las **calles
     reales** a un destino (zombies/dungeon) con **tiempo según la distancia real**. Falta `RoadGraph`
     (grafo: intersecciones = nodos compartidos en OSM) + A\*; el "caminar" (`_advance`) ya existe.
