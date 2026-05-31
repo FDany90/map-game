@@ -92,6 +92,39 @@ void main() {
       expect(l.realNorthAngleRad.abs(), closeTo(math.pi / 2, 0.02));
     });
 
+    // Regresión (bug 2026-05-31): una calle casi N-S guardada en OSM de norte→sur
+    // (orden de nodos arbitrario) hacía rot≈π → daba toda la escena vuelta y el
+    // norte apuntando hacia abajo. Ahora rot se normaliza a (−π/2, π/2]: la calle
+    // queda vertical igual pero el norte NUNCA se invierte (rot pequeño).
+    test('calle N-S guardada al reves no invierte el norte', () {
+      final mPerDegLon = _mPerDegLat * math.cos(_center.latitude * math.pi / 180);
+      LatLng p(double east, double north) => LatLng(
+            _center.latitude + north / _mPerDegLat,
+            _center.longitude + east / mPerDegLon,
+          );
+      // Nodos de norte a sur (al revés): antes esto disparaba la inversión.
+      final reversed = OsmFeature(
+        id: 1,
+        kind: OsmFeatureKind.street,
+        tags: const {'highway': 'residential'},
+        geometry: [p(0, 150), p(0, -150)],
+      );
+      final l = CombatSceneLayout.fromScene(_scene([reversed]));
+      // Norte casi arriba: |rot| chico, jamás ~π.
+      expect(l.realNorthAngleRad.abs(), lessThan(0.02));
+    });
+
+    // La normalización nunca debe rotar más de 90°: el norte se mantiene a ±90°
+    // de "arriba" venga como venga la calle en OSM.
+    test('la rotacion aplicada nunca supera 90 grados', () {
+      for (final bearing in [0.0, 30.0, 91.0, 135.0, 200.0, 270.0, 350.0]) {
+        final l =
+            CombatSceneLayout.fromScene(_scene([_street('residential', bearing, 200)]));
+        expect(l.realNorthAngleRad.abs(), lessThanOrEqualTo(math.pi / 2 + 1e-9),
+            reason: 'bearing $bearing → rot ${l.realNorthAngleRad}');
+      }
+    });
+
     test('zona residencial sin edificios OSM genera casas inferidas', () {
       final l = CombatSceneLayout.fromScene(_scene([
         for (var i = 0; i < 4; i++) _street('residential', 0, 180),
@@ -124,6 +157,97 @@ void main() {
     test('parque/vacio no genera edificios', () {
       final l = CombatSceneLayout.fromScene(_scene(const []));
       expect(l.buildings, isEmpty);
+    });
+
+    // Regresión (bug 2026-05-31): si el jugador tocaba al costado de la calle, la
+    // calle se dibujaba en su x real pero los edificios se generaban centrados en
+    // el click → quedaban desalineados. Ahora la escena se re-centra: la calle
+    // principal pasa por x≈0 y los edificios quedan pegados a ella.
+    test('calle desplazada del click se re-centra en x=0', () {
+      // Calle N-S corrida 40 m al este del punto tocado.
+      final mPerDegLon = _mPerDegLat * math.cos(_center.latitude * math.pi / 180);
+      LatLng p(double east, double north) => LatLng(
+            _center.latitude + north / _mPerDegLat,
+            _center.longitude + east / mPerDegLon,
+          );
+      final offsetStreet = OsmFeature(
+        id: 1,
+        kind: OsmFeatureKind.street,
+        tags: const {'highway': 'residential'},
+        geometry: [p(40, -150), p(40, 150)],
+      );
+      final l = CombatSceneLayout.fromScene(_scene([offsetStreet]));
+
+      // La calle principal debe pasar cerca de x=0 (re-centrada).
+      final main = l.streets.firstWhere((s) => s.isMain);
+      final mainX =
+          main.points.map((e) => e.x).reduce((a, b) => a + b) / main.points.length;
+      expect(mainX.abs(), lessThan(1.0));
+
+      // Y los edificios deben quedar pegados a la calle (a pocos metros de x=0),
+      // no flotando a 40 m como antes del arreglo.
+      expect(l.buildings, isNotEmpty);
+      for (final b in l.buildings) {
+        final nearEdge = b.footprint
+            .map((e) => e.x.abs())
+            .reduce((a, c) => a < c ? a : c);
+        expect(nearEdge, lessThan(15),
+            reason: 'edificio demasiado lejos de la calle: $nearEdge m');
+      }
+    });
+
+    // Regresión (bug 2026-05-31): la rotación usaba la cuerda extremo-a-extremo,
+    // así que una calle con un quiebre quedaba inclinada frente al jugador.
+    // Ahora se usa la dirección del tramo más cercano al origen → el pedazo de
+    // calle donde está parado el jugador queda vertical.
+    test('calle con quiebre: el tramo del jugador queda vertical', () {
+      final mPerDegLon = _mPerDegLat * math.cos(_center.latitude * math.pi / 180);
+      LatLng p(double east, double north) => LatLng(
+            _center.latitude + north / _mPerDegLat,
+            _center.longitude + east / mPerDegLon,
+          );
+      // Tramo cercano N-S (vertical); luego quiebra en diagonal lejos → la cuerda
+      // extremo-a-extremo es diagonal, pero el tramo del jugador es vertical.
+      final bent = OsmFeature(
+        id: 1,
+        kind: OsmFeatureKind.street,
+        tags: const {'highway': 'residential'},
+        geometry: [p(0, -80), p(0, 0), p(120, 80)],
+      );
+      final l = CombatSceneLayout.fromScene(_scene([bent]));
+      // El segmento de la calle principal más cercano al origen debe ser vertical.
+      final main = l.streets.firstWhere((s) => s.isMain);
+      var bestD2 = double.infinity;
+      var nearHoriz = 1.0;
+      for (var i = 0; i < main.points.length - 1; i++) {
+        final a = main.points[i], b = main.points[i + 1];
+        final mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        final d2 = mx * mx + my * my;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          final dx = (b.x - a.x).abs(), dy = (b.y - a.y).abs();
+          final len = math.sqrt(dx * dx + dy * dy);
+          nearHoriz = len == 0 ? 1.0 : dx / len;
+        }
+      }
+      expect(nearHoriz, lessThan(0.05));
+    });
+
+    // Ningún edificio inferido debe montarse sobre la calle principal (x≈0).
+    test('los edificios no pisan la calle principal', () {
+      final l = CombatSceneLayout.fromScene(_scene([
+        for (var i = 0; i < 4; i++) _street('primary', 0, 220),
+      ]));
+      final mainHalf =
+          l.streets.firstWhere((s) => s.isMain).width / 2;
+      for (final b in l.buildings) {
+        // El footprint no debe cruzar la franja de la calzada principal.
+        final minX = b.footprint.map((e) => e.x).reduce(math.min);
+        final maxX = b.footprint.map((e) => e.x).reduce(math.max);
+        final crossesAxis = minX < mainHalf && maxX > -mainHalf;
+        expect(crossesAxis, isFalse,
+            reason: 'edificio sobre la calle principal: [$minX, $maxX]');
+      }
     });
   });
 }

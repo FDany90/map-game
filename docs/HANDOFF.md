@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-05-31** (Inspector OSM + **Fase 2: escena de combate generada desde OSM** — ADR 0007)
+> Última actualización: **2026-05-31** (Inspector OSM + Fase 2 + **pivot a escena por *descriptor + templates*** — ADR 0007 Rev 2)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -150,6 +150,7 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 - [15-placement-bases-vecinos.md](15-placement-bases-vecinos.md) — anti-solapamiento de bases de vecinos (grilla + clustering)
 - [16-modelo-hexagonos-bd.md](16-modelo-hexagonos-bd.md) — BD de hexágonos: generación lazy (sparse, se materializa al jugar)
 - [17-inferencia-morfologia-urbana.md](17-inferencia-morfologia-urbana.md) — generar la escena cuando OSM **no trae edificios** (inferir zona desde calles + rellenar manzanas, determinista)
+- [18-scene-descriptor-templates.md](18-scene-descriptor-templates.md) — **pivot**: escena por *descriptor + templates orientados* (zona + topología + tags + POIs), NO geometría real (ADR 0007 Rev 2)
 - [spike-01-maptiler-flutter.md](spike-01-maptiler-flutter.md) — guía del spike
 - [decisions/](decisions/) — ADRs 0001-0007
 
@@ -234,11 +235,27 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       agrupados a un lado → como "paredes" del corredor servían mal (escena vacía aun con 12-39
       edificios reales). Se usan solo como **señal** (cantidad→densidad, `building:levels`/`height`→altura);
       el dibujo es generado y determinista por posición. Ver [17-inferencia-morfologia-urbana.md](17-inferencia-morfologia-urbana.md).
-    - ⬜ **Fase 3 (próxima) — assets + Flame con personajes:** **código primero, assets después** — la
-      *estructura* (edificios/calles) ya se genera por código; los *sprites/texturas* (props, zombies,
-      paredes) vendrán de un **asset pack CC0 (Kenney)** o artista, no se "generan" en el chat. Migrar
-      el preview (CustomPainter) a Flame con personajes "billboard" en movimiento, reusando el mismo
-      `CombatSceneLayout`. Selección de escena con **preferencia por esquinas** (ADR 0007 rev).
+    - 🔄 **PIVOT 2026-05-31 (ADR 0007 Rev 2) — escena por *descriptor + templates*, NO geometría:**
+      al renderizar la Fase 2, colocar edificios desde geometría real dio bugs duros y recurrentes
+      (desalineados, calle inclinada, **norte invertido**). Diagnóstico: reproducir geometría fiel hace
+      que **cada esquina del planeta sea un caso borde**, y es **innecesario** (la fidelidad al mapa real
+      ya vive en la capa mapa; el combate es un zoom táctico estilizado). **Se adopta el Nivel 2 puro:**
+      la escena se arma con **templates hechos a mano** que se **eligen y orientan** con OSM. La vara de
+      "se siente mi lugar" se cumple sin geometría: **nombre de calle**, casas/edificios por zona, **1-2
+      sentidos**, **variedad** de sprites, y **POIs reales con nombre** (Coto, la escuela) en la esquina.
+      **Se jubila** `_inferBuildings` (placement); **se conserva** `ZoneProfile`, norte/bearing, siembra
+      determinista, Inspector. **Se enriquece** con **topología** (esquina/intersección/mitad de cuadra/
+      fin, por conteo de cruces) + **tags de calle** (`maxspeed`/`surface`/`lit`/`sidewalk`/`oneway`) +
+      **POIs** (`shop`/`amenity`). **Spec completa:** [18-scene-descriptor-templates.md](18-scene-descriptor-templates.md).
+      Los arreglos de geometría del 2026-05-31 (re-centrado en x=0, norte normalizado, edificios siguiendo
+      la polilínea — 39 tests) quedan como **checkpoint**; el preview (`CombatScenePainter`) sigue hasta
+      tener templates.
+    - ⬜ **Próxima sesión (arrancar acá) — Fase A del pivot:** implementar `SceneDescriptor`
+      (zona ya está + topología + name + oneway/lanes/surface/lit + lista de landmarks/POIs) como
+      **lógica pura testeable**, y la **detección de topología** (cruces/ramas/ángulos). Luego: modelo de
+      template + 2-3 templates + selector orientado. Ver fases en [18-scene-descriptor-templates.md](18-scene-descriptor-templates.md).
+    - ⬜ **Después — assets + Flame:** pack CC0 (Kenney) para sprites (casas/edificios/POIs/autos) y
+      migrar el preview a Flame con personajes billboard, reusando descriptor + template.
 12. **Pathfinding del personaje a un punto (ascenso a L2):** mandar mi personaje por las **calles
     reales** a un destino (zombies/dungeon) con **tiempo según la distancia real**. Falta `RoadGraph`
     (grafo: intersecciones = nodos compartidos en OSM) + A\*; el "caminar" (`_advance`) ya existe.

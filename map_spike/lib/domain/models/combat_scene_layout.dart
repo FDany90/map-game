@@ -102,25 +102,44 @@ class CombatSceneLayout {
     final main = _pickMainStreet(streetsLocal);
 
     // 2) Rotación que vuelve vertical la calle principal (su dirección → eje +y).
-    // rot = π/2 − φ, con φ = ángulo estándar de la calle desde +x; rotación
-    // antihoraria estándar que lleva el vector de la calle a apuntar a +y.
-    final rot = main == null ? 0.0 : (math.pi / 2 - _streetAngle(main.pts));
+    // rot = π/2 − φ, con φ = ángulo estándar de la calle desde +x.
+    // **Normalizada a (−π/2, π/2]**: una calle es una línea sin sentido, pero OSM
+    // guarda sus nodos en un orden arbitrario; si vino de norte→sur, φ apunta
+    // hacia abajo y rot daría ~π (la escena entera dada vuelta, norte abajo).
+    // Rotar 180° de más deja la calle igual de vertical, así que elegimos la
+    // rotación de menor magnitud → el norte nunca se aleja más de 90° de arriba.
+    final rot = main == null ? 0.0 : _normalizeHalfPi(math.pi / 2 - _localStreetAngle(main.pts));
     final cosR = math.cos(rot), sinR = math.sin(rot);
     ScenePoint rotate(ScenePoint p) => (
           x: p.x * cosR - p.y * sinR,
           y: p.x * sinR + p.y * cosR,
         );
 
-    // 3) Calles rotadas + ancho por tipo.
+    // 2b) **Re-centrar la calle principal en x=0.** El origen es el punto que el
+    // jugador tocó, que casi nunca cae exacto sobre el eje de la calle. Sin esto,
+    // la calle se dibuja en su x real pero los edificios se generan simétricos
+    // alrededor de x=0 (el click) → quedan desalineados respecto a la calle.
+    // Tomamos el x (ya rotado) del punto de la calle más cercano al jugador y lo
+    // restamos, de modo que la calle pase por x=0 justo donde está el jugador.
+    final mainRotated = main == null ? null : [for (final p in main.pts) rotate(p)];
+    final mainX = mainRotated == null ? 0.0 : _xNearestToOrigin(mainRotated);
+    ScenePoint project(ScenePoint p) {
+      final r = rotate(p);
+      return (x: r.x - mainX, y: r.y);
+    }
+
+    // 3) Calles proyectadas (rotadas + re-centradas) + ancho por tipo.
     final outStreets = <SceneStreet>[
       for (final s in streetsLocal)
         SceneStreet(
-          points: [for (final p in s.pts) rotate(p)],
+          points: [for (final p in s.pts) project(p)],
           type: s.feature.tags['highway'] ?? 'residential',
           width: _streetWidth(s.feature.tags),
           isMain: identical(s, main),
         ),
     ];
+    final mainWidth =
+        main == null ? 0.0 : _streetWidth(main.feature.tags);
 
     // 4) Paredes del corredor: SIEMPRE procedurales (ADR 0007 rev / 2026-05-31).
     // Los footprints reales de OSM están a media cuadra y dispersos: no sirven
@@ -129,6 +148,9 @@ class CombatSceneLayout {
     final realCount = scene.buildings.length;
     final realAvgLevels = _avgExplicitLevels(scene.buildings);
     final crossStreets = [for (final s in outStreets) if (!s.isMain) s];
+    final mainStreetPts = main == null
+        ? const <ScenePoint>[]
+        : outStreets.firstWhere((s) => s.isMain).points;
     final walls = _inferBuildings(
       zone: zone,
       radius: radiusMeters,
@@ -137,6 +159,8 @@ class CombatSceneLayout {
       realCount: realCount,
       realAvgLevels: realAvgLevels,
       crossStreets: crossStreets,
+      mainStreet: mainStreetPts,
+      mainHalfWidth: mainWidth / 2,
     );
 
     // 5) Norte real tras rotar: el norte era +y; ahora apunta a `rot`.
@@ -176,11 +200,42 @@ class CombatSceneLayout {
     return best;
   }
 
-  /// Ángulo estándar (rad) de la dirección de la calle desde el eje +x
-  /// (antihorario), usando los puntos extremos.
-  static double _streetAngle(List<ScenePoint> pts) {
-    final a = pts.first, b = pts.last;
-    return math.atan2(b.y - a.y, b.x - a.x);
+  /// Ángulo (rad) de la dirección de la calle **en el tramo más cercano al
+  /// jugador** (origen), no de la cuerda extremo-a-extremo. Así la calle queda
+  /// vertical justo donde está parado el jugador, aunque la calle se curve.
+  /// (Bug 2026-05-31: usar los extremos dejaba la calle inclinada.)
+  static double _localStreetAngle(List<ScenePoint> pts) {
+    if (pts.length < 2) return math.pi / 2;
+    var bestD2 = double.infinity;
+    var bestAng = math.pi / 2;
+    for (var i = 0; i < pts.length - 1; i++) {
+      final a = pts[i], b = pts[i + 1];
+      final dx = b.x - a.x, dy = b.y - a.y;
+      final len2 = dx * dx + dy * dy;
+      if (len2 == 0) continue;
+      final t = ((-a.x * dx - a.y * dy) / len2).clamp(0.0, 1.0);
+      final cx = a.x + t * dx, cy = a.y + t * dy;
+      final d2 = cx * cx + cy * cy; // distancia² del segmento al origen
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestAng = math.atan2(dy, dx);
+      }
+    }
+    return bestAng;
+  }
+
+  /// Lleva un ángulo al rango (−π/2, π/2] sumando/restando π. Rotar la escena π
+  /// de más deja la calle igual de vertical pero invierte el norte; con esto
+  /// elegimos siempre la rotación mínima (norte arriba).
+  static double _normalizeHalfPi(double a) {
+    var x = a;
+    while (x > math.pi / 2) {
+      x -= math.pi;
+    }
+    while (x <= -math.pi / 2) {
+      x += math.pi;
+    }
+    return x;
   }
 
   static double _streetWidth(Map<String, String> tags) {
@@ -245,6 +300,8 @@ class CombatSceneLayout {
     required int realCount,
     required double? realAvgLevels,
     required List<SceneStreet> crossStreets,
+    required List<ScenePoint> mainStreet,
+    required double mainHalfWidth,
   }) {
     // Altura típica: la que declara OSM si la hay; si no, la de la zona.
     final baseLevels = realAvgLevels ?? _defaultLevels(zone.character);
@@ -257,38 +314,126 @@ class CombatSceneLayout {
     final rng = _SeededRng(_seedFrom(seedLat, seedLon));
     final parcel = dense ? 16.0 : 12.0; // largo de lote a lo largo de la calle
     final depth = dense ? 18.0 : 10.0; // fondo del edificio
-    final setback = (dense ? 7.0 : 5.0) + baseLevels * 0.15; // separación calle
+    // Separación calle↔edificio: vereda + media calzada de la calle principal,
+    // para que los lotes nunca se monten sobre el asfalto.
+    final setback =
+        math.max((dense ? 7.0 : 5.0) + baseLevels * 0.15, mainHalfWidth + 2.5);
     final gapProb = (dense ? 0.12 : 0.20) * (1 - 0.6 * densityBoost);
 
+    // Espina = la calle principal real, extendida a sus extremos para cubrir
+    // toda la escena. Los lotes se colocan **siguiendo esta polilínea** (no en
+    // columnas verticales fijas): así abrazan la calle aunque tenga inclinación
+    // o curva, en vez de despegarse arriba/abajo. (Bug 2026-05-31.)
+    final spine = _buildSpine(mainStreet, radius);
+    final samples = _samplesAlong(spine, parcel, parcel / 2);
+
     final out = <SceneBuilding>[];
-    // La calle principal quedó vertical (eje y): lotes a izquierda y derecha.
-    for (var side = -1; side <= 1; side += 2) {
-      final baseX = side * setback;
-      for (var y = -radius + parcel / 2; y < radius; y += parcel) {
+    for (final s in samples) {
+      // Descarto muestras fuera del cuadro (la espina se extendió de más).
+      if (s.pos.x.abs() > radius * 1.2 || s.pos.y.abs() > radius * 1.05) {
+        continue;
+      }
+      // Normal izquierda a la dirección local de la calle.
+      final nx = -s.dir.y, ny = s.dir.x;
+      for (var side = -1; side <= 1; side += 2) {
         if (rng.next() < gapProb) continue; // hueco/baldío ocasional
-        final jitterX = (rng.next() - 0.5) * 3;
-        final w = parcel * (0.7 + rng.next() * 0.25);
-        final d = depth * (0.8 + rng.next() * 0.4);
-        final x0 = side > 0 ? baseX + jitterX : baseX - jitterX - d;
-        final y0 = y - w / 2;
-        // Carve-out de cruces: si el lote pisa una calle transversal, lo salteo
-        // (deja la intersección despejada — las esquinas son escenarios clave).
-        if (_touchesAnyStreet(x0 + d / 2, y0 + w / 2, crossStreets)) continue;
+        final w = parcel * (0.7 + rng.next() * 0.25); // a lo largo de la calle
+        final d = depth * (0.8 + rng.next() * 0.4); // fondo (perpendicular)
+        final jitter = (rng.next() - 0.5) * 2;
+        final off = setback + d / 2 + jitter; // distancia al eje de la calle
+        final cx = s.pos.x + nx * side * off;
+        final cy = s.pos.y + ny * side * off;
+        // Ejes del lote: mitad a lo largo de la calle (dir) y mitad al fondo (n).
+        final ax = s.dir.x * (w / 2), ay = s.dir.y * (w / 2);
+        final bx = nx * (d / 2), by = ny * (d / 2);
+        final footprint = <ScenePoint>[
+          (x: cx - ax - bx, y: cy - ay - by),
+          (x: cx + ax - bx, y: cy + ay - by),
+          (x: cx + ax + bx, y: cy + ay + by),
+          (x: cx - ax + bx, y: cy - ay + by),
+        ];
+        // Carve-out de cruces: si alguna esquina pisa una calle transversal, lo
+        // salteo (deja la intersección despejada — las esquinas son clave).
+        if (footprint.any((p) => _touchesAnyStreet(p.x, p.y, crossStreets))) {
+          continue;
+        }
         final lv =
             (baseLevels * (0.6 + rng.next() * 0.9)).clamp(1, 60).toDouble();
-        out.add(SceneBuilding(
-          footprint: [
-            (x: x0, y: y0),
-            (x: x0 + d, y: y0),
-            (x: x0 + d, y: y0 + w),
-            (x: x0, y: y0 + w),
-          ],
-          levels: lv,
-          inferred: true,
-        ));
+        out.add(SceneBuilding(footprint: footprint, levels: lv, inferred: true));
       }
     }
     return out;
+  }
+
+  /// La calle principal real extendida por ambos extremos (siguiendo la
+  /// dirección de su primer/último segmento) para cubrir toda la escena. Si no
+  /// hay calle, devuelve un eje vertical por el origen.
+  static List<ScenePoint> _buildSpine(List<ScenePoint> main, double radius) {
+    if (main.length < 2) {
+      return [(x: 0.0, y: -radius), (x: 0.0, y: radius)];
+    }
+    final out = [...main];
+    final ext = radius * 2;
+    final a0 = out[0], a1 = out[1];
+    final d0 = _unit(a0.x - a1.x, a0.y - a1.y); // hacia afuera del inicio
+    out.insert(0, (x: a0.x + d0.x * ext, y: a0.y + d0.y * ext));
+    final b1 = out[out.length - 1], b0 = out[out.length - 2];
+    final d1 = _unit(b1.x - b0.x, b1.y - b0.y); // hacia afuera del final
+    out.add((x: b1.x + d1.x * ext, y: b1.y + d1.y * ext));
+    return out;
+  }
+
+  /// Muestrea una polilínea cada [step] metros de arco, arrancando a [start] del
+  /// inicio. Devuelve la posición y la **dirección unitaria local** en cada paso.
+  static List<({ScenePoint pos, ScenePoint dir})> _samplesAlong(
+    List<ScenePoint> pts,
+    double step,
+    double start,
+  ) {
+    final out = <({ScenePoint pos, ScenePoint dir})>[];
+    var dist = start; // metros hasta la próxima muestra
+    for (var i = 0; i < pts.length - 1; i++) {
+      final a = pts[i], b = pts[i + 1];
+      final dx = b.x - a.x, dy = b.y - a.y;
+      final segLen = math.sqrt(dx * dx + dy * dy);
+      if (segLen == 0) continue;
+      final ux = dx / segLen, uy = dy / segLen;
+      var t = dist;
+      while (t <= segLen) {
+        out.add((pos: (x: a.x + ux * t, y: a.y + uy * t), dir: (x: ux, y: uy)));
+        t += step;
+      }
+      dist = t - segLen; // arrastro el resto al próximo segmento
+    }
+    return out;
+  }
+
+  static ScenePoint _unit(double x, double y) {
+    final len = math.sqrt(x * x + y * y);
+    return len == 0 ? (x: 0.0, y: 1.0) : (x: x / len, y: y / len);
+  }
+
+  /// x del punto de la polilínea [pts] más cercano al origen (0,0). Sirve para
+  /// re-centrar la calle principal en x=0 justo donde está el jugador.
+  static double _xNearestToOrigin(List<ScenePoint> pts) {
+    if (pts.length == 1) return pts.first.x;
+    var bestD2 = double.infinity;
+    var bestX = 0.0;
+    for (var i = 0; i < pts.length - 1; i++) {
+      final a = pts[i], b = pts[i + 1];
+      final dx = b.x - a.x, dy = b.y - a.y;
+      final len2 = dx * dx + dy * dy;
+      final t = len2 == 0
+          ? 0.0
+          : ((-a.x * dx - a.y * dy) / len2).clamp(0.0, 1.0);
+      final cx = a.x + t * dx, cy = a.y + t * dy;
+      final d2 = cx * cx + cy * cy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestX = cx;
+      }
+    }
+    return bestX;
   }
 
   /// ¿El punto (x,y) cae sobre alguna de estas calles (dentro de su ancho)?

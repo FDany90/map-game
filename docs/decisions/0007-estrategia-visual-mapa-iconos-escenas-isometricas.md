@@ -1,6 +1,6 @@
 # ADR 0007 — Estrategia visual: mapa top-down con iconos + escenas isométricas generadas desde OSM
 
-> Estado: **aceptada** · 2026-05-30 · **revisada 2026-05-31** (ver "Revisión" abajo)
+> Estado: **aceptada** · 2026-05-30 · **revisada 2026-05-31** (Rev 1 y Rev 2, ver abajo)
 > Relacionada con: [0001](0001-stack-flutter-flame.md) (Flutter+Flame),
 > [0004](0004-tiles-raster-estilizados.md) (tiles raster),
 > [0006](0006-mapa-flutter-map-flame-combate.md) (flutter_map; Flame para combate).
@@ -46,6 +46,30 @@
 > REAL (opción b)" de abajo quedan **superadas para el combate** por esta revisión. El resto
 > del ADR (mapa con iconos, generación procedural desde OSM, continuidad mapa↔escena) sigue
 > vigente. Estilo de arte: **código primero** (cero assets), luego pack CC0 (Kenney).
+
+> ## ⚠️ Revisión 2 — 2026-05-31 (escena por *descriptor + templates*, manda sobre Rev 1 punto 5)
+> Al renderizar la Fase 2 (colocar edificios desde geometría real, `_inferBuildings`)
+> aparecieron bugs duros y recurrentes: **edificios desalineados** respecto a la calle,
+> **calle inclinada**, **norte invertido**. Diagnóstico: reproducir geometría real fielmente
+> hace que **cada esquina del planeta sea un caso borde** → bugs difíciles de encontrar. Y es
+> **innecesario**: la fidelidad al mapa real ya vive en la **capa mapa** (flutter_map); el
+> combate es un **zoom táctico estilizado**.
+>
+> **Se adopta el Nivel 2 "puro"** (que este ADR ya proponía como objetivo inicial): la escena
+> se arma con **templates hechos a mano** que se **eligen y orientan** con datos OSM, en vez de
+> colocar geometría. La vara de "se siente mi lugar" (definida con el usuario) es modesta y se
+> cumple sin geometría exacta: **nombre de la calle**, casas/edificios acordes a la zona, **1 ó
+> 2 sentidos**, **variedad** de sprites, y **POIs reales con su nombre** (Coto, Farmacity, la
+> escuela) en el slot de esquina.
+>
+> - **Se jubila:** `CombatSceneLayout._inferBuildings` (placement desde geometría/polilíneas).
+>   `CombatScenePainter` queda como preview hasta tener templates.
+> - **Se conserva:** `ZoneProfile` (zona), norte/bearing, siembra determinista, Inspector/fetch OSM.
+> - **Se enriquece** con: detección de **topología** (esquina/intersección/mitad de cuadra/fin,
+>   por conteo de cruces), **tags de calle como temática** (`maxspeed`, `surface`, `lit`,
+>   `sidewalk`, `oneway`/`lanes`, `name`), y **POIs con nombre** (`shop`/`amenity`/`building`).
+>
+> Spec completa: [18-scene-descriptor-templates.md](../18-scene-descriptor-templates.md).
 
 ## Contexto
 Surgió la pregunta de cómo mostrar monstruos, edificios y personajes, y si el mapa podía verse
