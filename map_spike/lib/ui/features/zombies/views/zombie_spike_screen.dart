@@ -1,12 +1,13 @@
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 
 import '../../../../config/app_config.dart';
 import '../../../../data/repositories/streets_repository.dart';
 import '../../../../data/services/overpass_service.dart';
+import '../../../../data/services/tile_request_monitor.dart';
 import '../../../../domain/models/streets_source.dart';
+import '../../../widgets/tile_request_badge.dart';
 import '../view_models/zombie_spike_view_model.dart';
 
 /// Spike L0: zombies caminando por las calles hacia la base, muertos por la
@@ -72,10 +73,8 @@ class _ZombieSpikeScreenState extends State<ZombieSpikeScreen> {
                   TileLayer(
                     urlTemplate: AppConfig.tileUrlTemplate,
                     userAgentPackageName: AppConfig.userAgentPackageName,
-                    tileProvider: CachedTileProvider(
-                      maxStale: const Duration(days: 30),
-                      store: widget.tileStore,
-                    ),
+                    tileSize: AppConfig.tileSize,
+                    tileProvider: buildCountingTileProvider(widget.tileStore),
                   ),
                   // Calles cargadas (los "carriles" por donde caminan).
                   PolylineLayer(
@@ -142,6 +141,11 @@ class _ZombieSpikeScreenState extends State<ZombieSpikeScreen> {
                 ],
               ),
               Positioned(top: 0, left: 0, right: 0, child: _hud()),
+              const Positioned(
+                left: 8,
+                bottom: 8,
+                child: SafeArea(child: TileRequestBadge()),
+              ),
             ],
           );
         },

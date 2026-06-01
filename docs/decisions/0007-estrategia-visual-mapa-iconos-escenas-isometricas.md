@@ -71,6 +71,40 @@
 >
 > Spec completa: [18-scene-descriptor-templates.md](../18-scene-descriptor-templates.md).
 
+> ## ⚠️ Revisión 3 — 2026-05-31 (look: **isométrico 2.5D con sprites 3D pre-renderizados**, manda sobre Rev 1 punto 1)
+> Con la escena ya armada por **templates** (Rev 2) — no por geometría real — **se vuelve a
+> isométrico 2.5D** para el combate (lo que este ADR proponía originalmente), porque queda
+> mejor: los edificios muestran **fachada** (se leen como edificios, no como techos vistos de
+> arriba) y la escena gana profundidad (look tipo TWD Survivors / Survivor.io).
+>
+> **Por qué ahora sí (y antes no):** el ÚNICO motivo por el que la Rev 1 pasó a top-down fue la
+> **rotación** — se quería respetar el *bearing real* de la calle, y el iso tiene la perspectiva
+> horneada en el sprite (no se rota a un ángulo arbitrario). La **Rev 2 eliminó ese requisito**:
+> la calle va **siempre a vertical** y el norte real se muestra solo con **brújula**. Sin
+> rotación arbitraria, la perspectiva horneada deja de ser un problema → iso vuelve a ser viable.
+>
+> **Stack sin cambios — el 3D es solo producción de assets, NO runtime:**
+> - El juego **sigue en Flame 2D** (ADR 0001/0006). Flame nunca ve un polígono 3D.
+> - Los assets se **pre-renderizan** (hornean) de modelos 3D CC0 (Kenney/Quaternius) a **sprites
+>   PNG 2D** en Blender, a un **ángulo ¾ fijo**, con **sombra horneada**, una sola vez (offline).
+> - Es la técnica clásica de iso pre-renderizado (Diablo I/II, StarCraft, Age of Empires). Ideal
+>   para dev solo y sin habilidad de dibujo: modelar/bajar una vez → renderás → atlas → Flame.
+> - **Unity sigue descartado** (ADR 0001): se elige Flutter por el **mapa real**; el iso por
+>   sprites pre-renderizados da el look 3D sin motor 3D ni revertir el stack.
+>
+> **Aclaración técnica (el trade-off honesto):** "isométrico **estricto**" (ejes del piso a
+> ±26.57°) y "calle **perfectamente vertical**" son **geométricamente incompatibles** (rotar una
+> vista iso 45° la aplana a una vista frontal). Se resuelve **a favor de la calle vertical**: la
+> escena es una **vista ¾ (dimétrica/oblicua)** con leve inclinación — calle vertical, edificios
+> con **fachada + techo** (y un poco de lateral según la inclinación). Como el sprite se hornea a
+> **ese** ángulo ¾ fijo y no se rota, no hacen falta sets por dirección. (En el lenguaje del
+> proyecto le decimos "iso 2.5D"; la precisión es: ¾ con calle vertical.)
+>
+> **Personajes:** siguen siendo **billboard de frente** con sombra elíptica (sin cambios).
+> **Se reemplaza** el preview top-down (`CombatScenePainter`) por un **preview iso de slots** (cajas
+> placeholder) para validar el layout antes de tener assets. El resto de Rev 2 (descriptor +
+> templates, topología, POIs, siembra determinista, brújula) **sigue vigente**.
+
 ## Contexto
 Surgió la pregunta de cómo mostrar monstruos, edificios y personajes, y si el mapa podía verse
 en perspectiva/3D. Análisis (ver doc 12):

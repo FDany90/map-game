@@ -1,11 +1,12 @@
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../config/app_config.dart';
 import '../../../../data/repositories/osm_scene_repository.dart';
+import '../../../../data/services/tile_request_monitor.dart';
+import '../../../widgets/tile_request_badge.dart';
 import '../../../../data/services/nominatim_service.dart';
 import '../../../../data/services/overpass_service.dart';
 import '../../../../domain/models/osm_feature.dart';
@@ -121,10 +122,8 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
             TileLayer(
               urlTemplate: AppConfig.tileUrlTemplate,
               userAgentPackageName: AppConfig.userAgentPackageName,
-              tileProvider: CachedTileProvider(
-                maxStale: const Duration(days: 30),
-                store: widget.tileStore,
-              ),
+              tileSize: AppConfig.tileSize,
+              tileProvider: buildCountingTileProvider(widget.tileStore),
             ),
             // Áreas (leisure): polígonos verdes.
             if (scene != null)
@@ -193,6 +192,8 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
         ),
         // Chips de radio (arriba).
         Positioned(top: 8, left: 8, child: _radiusChips()),
+        // Contador de requests (la navegación del inspector es la que más gasta).
+        const Positioned(top: 8, right: 8, child: SafeArea(child: TileRequestBadge())),
         // Hint + loading.
         Positioned(
           bottom: 8,

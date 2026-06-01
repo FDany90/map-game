@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-05-31** (Inspector OSM + Fase 2 + **pivot a escena por *descriptor + templates*** — ADR 0007 Rev 2)
+> Última actualización: **2026-05-31** (Inspector OSM + Fase 2 + pivot a *descriptor + templates* — ADR 0007 Rev 2 + **vuelta a isométrico 2.5D con sprites pre-renderizados + preview iso de templates** — ADR 0007 Rev 3)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -52,6 +52,18 @@ capa opcional = **Modo Exploración** con GPS. Hecho por **un desarrollador en s
 - **Costos MapTiler:** para nuestros tiles raster se factura por **REQUESTS** (Free 100k/mes;
   cada tile no cacheado = 1 request), NO por sesiones. La **caché** es la palanca #1.
   [08-cost-analysis-tiles.md](08-cost-analysis-tiles.md)
+- **Presupuesto de tiles + bandas de zoom (DECIDIDO 2026-05-31):** objetivo **≤100-200 requests/
+  jugador/mes**. Se logra con **bandas de zoom discretas por modo** (Base local z18 · Mapa-ciudad
+  z11-12 con iconos del backend · País z4-7), **sin z13-17 de roam libre**, área acotada por banda,
+  y exploración = mapa de ciudad con iconos (NO GPS al inicio). `maxZoom` capeado 20→18. Se agregó
+  un **monitor de requests in-app** (`TileRequestMonitor` + chip "🛰️ MapTiler: N", toca→resumen por
+  zoom en consola) para medir por prueba, **botones de banda de zoom** (Ciudad z10/Barrio z14/Base
+  z18 + recenter, saltos con `move()` instantáneo = sin tiles intermedios) y **zoom continuo
+  desactivado** (pinch/doble-tap/scroll off → el zoom solo cambia por banda). **Experimento
+  `tileSize: 512` REVERTIDO:** en flutter_map 7 desplazaba el encuadre a escala país (no de barrio);
+  el ahorro por tile-grande requiere config de CRS/`zoomOffset`, a futuro. Ver
+  [08-cost-analysis-tiles.md](08-cost-analysis-tiles.md) +
+  [13-modos-pantallas-backlog.md](13-modos-pantallas-backlog.md).
 
 ---
 
@@ -250,12 +262,30 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       Los arreglos de geometría del 2026-05-31 (re-centrado en x=0, norte normalizado, edificios siguiendo
       la polilínea — 39 tests) quedan como **checkpoint**; el preview (`CombatScenePainter`) sigue hasta
       tener templates.
-    - ⬜ **Próxima sesión (arrancar acá) — Fase A del pivot:** implementar `SceneDescriptor`
-      (zona ya está + topología + name + oneway/lanes/surface/lit + lista de landmarks/POIs) como
-      **lógica pura testeable**, y la **detección de topología** (cruces/ramas/ángulos). Luego: modelo de
-      template + 2-3 templates + selector orientado. Ver fases en [18-scene-descriptor-templates.md](18-scene-descriptor-templates.md).
-    - ⬜ **Después — assets + Flame:** pack CC0 (Kenney) para sprites (casas/edificios/POIs/autos) y
-      migrar el preview a Flame con personajes billboard, reusando descriptor + template.
+    - 🔄 **REV 3 2026-05-31 (ADR 0007) — look: isométrico 2.5D con sprites 3D pre-renderizados:**
+      con la escena ya por **templates** (no geometría), se vuelve a **isométrico 2.5D** (queda mejor:
+      fachadas + profundidad). El motivo que descartó iso en Rev 1 era la **rotación** (bearing real),
+      que la Rev 2 eliminó (calle siempre vertical + brújula) → iso vuelve a ser viable. **Stack sin
+      cambios:** el juego sigue en **Flame 2D**; el 3D es solo **producción de assets** — se hornean
+      kits 3D CC0 (Kenney/Quaternius) a **sprites PNG a un ángulo ¾ fijo** en Blender (técnica clásica:
+      Diablo/StarCraft). **Unity sigue descartado** (Flutter por el mapa). Trade-off honesto: "iso
+      estricto" y "calle perfectamente vertical" son incompatibles → se elige **calle vertical + vista
+      ¾** (fachada + techo). Detalle en [ADR 0007 Rev 3](decisions/0007-estrategia-visual-mapa-iconos-escenas-isometricas.md).
+    - ✅ **HECHO (2026-05-31) — modelo de template + preview iso (doc 18 fases 3-4):**
+      `domain/models/scene_template.dart` (slots en *street-space* `u`/`v`/`levels`, puro y determinista;
+      3 templates iniciales: `residential.midBlock`, `residential.corner`, `denseUrban.intersection`),
+      `ui/features/combat_scene/views/widgets/iso_template_painter.dart` (proyección iso ¾, calle vertical,
+      cajas placeholder con fachada/techo/sombra) y `iso_template_preview_screen.dart` (selector de template
+      + sliders de inclinación/cámara en vivo). **Entrada:** FAB violeta 🟣 (`view_in_ar`) en el mapa — no
+      necesita OSM. Tests: `scene_template_test.dart`. **Pendiente:** conectar el descriptor OSM (Fase A) para
+      elegir/orientar el template real en vez del fijo.
+    - ⬜ **Fase A del pivot (descriptor):** implementar `SceneDescriptor` (zona ya está + topología +
+      name + oneway/lanes/surface/lit + lista de landmarks/POIs) como **lógica pura testeable**, y la
+      **detección de topología** (cruces/ramas/ángulos), y el **selector** descriptor→template orientado.
+      Ver fases en [18-scene-descriptor-templates.md](18-scene-descriptor-templates.md).
+    - ⬜ **Assets (pipeline pre-render) + Flame:** modelar/bajar kit 3D CC0 (Kenney City Kit / Quaternius)
+      → render orto a ángulo ¾ fijo en Blender (sombra horneada) → PNG/atlas → reemplazar las cajas
+      placeholder por sprites; migrar a Flame con personajes **billboard**, reusando descriptor + template.
 12. **Pathfinding del personaje a un punto (ascenso a L2):** mandar mi personaje por las **calles
     reales** a un destino (zombies/dungeon) con **tiempo según la distancia real**. Falta `RoadGraph`
     (grafo: intersecciones = nodos compartidos en OSM) + A\*; el "caminar" (`_advance`) ya existe.

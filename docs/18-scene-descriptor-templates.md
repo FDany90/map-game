@@ -5,6 +5,11 @@
 > orientan con datos OSM. Decisión en [ADR 0007](decisions/0007-estrategia-visual-mapa-iconos-escenas-isometricas.md)
 > (Revisión 2 / 2026-05-31). Relacionado: [14-osm-datos-referencia.md](14-osm-datos-referencia.md),
 > [17-inferencia-morfologia-urbana.md](17-inferencia-morfologia-urbana.md).
+>
+> **Render (ADR 0007 Rev 3):** los templates se dibujan en **isométrico 2.5D — vista ¾ con la
+> calle vertical** (no top-down). Los sprites finales se **pre-renderizan** de kits 3D CC0
+> (Kenney/Quaternius) a PNG 2D a un ángulo ¾ fijo; el juego sigue en **Flame 2D** (el 3D es
+> solo producción de assets, offline). El preview valida el layout con **cajas placeholder iso**.
 
 ## Por qué este cambio
 
@@ -111,6 +116,11 @@ edificio se llenan con sprites elegidos por **siembra determinista** (variedad e
 los `cornerLandmark` se llenan primero con los **POIs reales** (con nombre); si sobran,
 genéricos.
 
+**Coordenadas de slot (street-space):** posición/tamaño **normalizados a la calle**, no a la
+pantalla — `u` = a lo ancho de la calle (−1 izq … +1 der, 0 = eje), `v` = a lo largo (0 cerca/
+abajo … 1 lejos/arriba), más `levels` (altura de extrusión). El render iso ¾ proyecta `(u,v,z)`
+a pantalla; así el mismo template sirve para cualquier inclinación/escala sin reescribir slots.
+
 Conjunto inicial sugerido (pocos, bien tuneados):
 1. `residential · midBlock` — casas bajas, calle 2 sentidos.
 2. `residential · corner` — casas + esquina con landmark.
@@ -124,11 +134,13 @@ Conjunto inicial sugerido (pocos, bien tuneados):
    oneway/lanes/surface/lit, y la lista de landmarks). Lógica pura, **testeable**.
 2. **Detección de topología** (cruces/ramas/ángulos). Pura, testeable.
 3. **Modelo de template + 2-3 templates** (datos) + **selector** (descriptor → template,
-   orientado y escalado).
-4. **Render preview** reusando `CombatScenePainter` (slots → cajas/labels) para validar
-   sin assets.
-5. **Assets**: pack CC0 (Kenney) para sprites de casas/edificios/POIs/autos + variedad.
-6. **Migrar a Flame** con personajes billboard (reusa descriptor + template).
+   orientado y escalado). ✅ *modelo + templates iniciales hechos (placeholder).*
+4. **Render preview iso** (slots → cajas/labels en vista ¾, calle vertical) para validar el
+   layout sin assets. ✅ *`IsoTemplatePainter` + pantalla de preview con sliders de inclinación.*
+5. **Assets (pipeline pre-render):** modelar/bajar kit 3D CC0 (Kenney City Kit / Quaternius) →
+   render orto a **ángulo ¾ fijo** en Blender (sombra horneada) → PNG/atlas → reemplazar las
+   cajas placeholder por sprites. Variedad por slot vía siembra determinista.
+6. **Migrar a Flame** con personajes **billboard** de frente (reusa descriptor + template + atlas).
 
 ## Riesgos / cuidados
 - Mapeo `shop`/`amenity` → `kind` debe tener **fallback `generic`** (OSM trae miles de valores).

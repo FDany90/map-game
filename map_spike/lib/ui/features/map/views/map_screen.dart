@@ -2,13 +2,15 @@ import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../config/app_config.dart';
 import '../../../../data/repositories/territory_repository.dart';
 import '../../../../data/services/hex_grid_service.dart';
+import '../../../../data/services/tile_request_monitor.dart';
 import '../../../../domain/models/claim_result.dart';
+import '../../../widgets/tile_request_badge.dart';
+import '../../combat_scene/views/iso_template_preview_screen.dart';
 import '../../osm_inspector/views/osm_inspector_screen.dart';
 import '../../zombies/views/zombie_spike_screen.dart';
 import '../view_models/map_view_model.dart';
@@ -68,6 +70,65 @@ class _MapScreenState extends State<MapScreen> {
     _mapController.move(_mapController.camera.center, z);
   }
 
+  /// Salta a un **nivel de zoom predefinido** (banda LOD, ver doc 08/13): en vez
+  /// de zoom libre, el jugador alterna entre Ciudad / Barrio / Base.
+  void _setZoom(double z) {
+    _mapController.move(
+      _mapController.camera.center,
+      z.clamp(AppConfig.minZoom, AppConfig.maxZoom).toDouble(),
+    );
+  }
+
+  /// Vuelve al centro inicial (la "base") sin cambiar el zoom.
+  void _recenter() =>
+      _mapController.move(AppConfig.initialCenter, _viewModel.zoom);
+
+  /// Barra de **bandas de zoom** (LOD): salta directo a Ciudad/Barrio/Base con
+  /// `move()` (instantáneo → no carga tiles intermedios) + recenter a la base.
+  Widget _zoomBar() {
+    final z = _viewModel.zoom.round();
+
+    Widget tile(IconData icon, String label, {bool active = false, required VoidCallback onTap}) {
+      return Material(
+        color: active ? Colors.cyan.shade700 : Colors.black.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: Colors.white),
+                const SizedBox(height: 2),
+                Text(label,
+                    style: const TextStyle(color: Colors.white, fontSize: 9)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget band(IconData icon, String label, int zoom) => tile(
+          icon,
+          label,
+          active: (z - zoom).abs() <= 1,
+          onTap: () => _setZoom(zoom.toDouble()),
+        );
+
+    return Wrap(
+      spacing: 6,
+      children: [
+        band(Icons.location_city, 'Ciudad', 10),
+        band(Icons.holiday_village, 'Barrio', 14),
+        band(Icons.home, 'Base', 18),
+        tile(Icons.my_location, 'Centro', onTap: _recenter),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,9 +144,14 @@ class _MapScreenState extends State<MapScreen> {
                   initialZoom: AppConfig.initialZoom,
                   minZoom: AppConfig.minZoom,
                   maxZoom: AppConfig.maxZoom,
+                  // Solo PAN (arrastrar). El zoom continuo (pinch/doble-tap/
+                  // scroll) está DESACTIVADO a propósito: el zoom cambia solo con
+                  // los botones de banda → saltos instantáneos sin cargar tiles
+                  // intermedios (control de costo, doc 08).
                   interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all,
-                    scrollWheelVelocity: 0.01,
+                    flags: InteractiveFlag.drag |
+                        InteractiveFlag.flingAnimation |
+                        InteractiveFlag.pinchMove,
                   ),
                   onTap: (_, point) => _onTapMap(point),
                   onPositionChanged: (camera, _) =>
@@ -95,11 +161,9 @@ class _MapScreenState extends State<MapScreen> {
                   TileLayer(
                     urlTemplate: AppConfig.tileUrlTemplate,
                     userAgentPackageName: AppConfig.userAgentPackageName,
-                    tileProvider: CachedTileProvider(
-                      // Tiles válidos 30 días antes de re-pedirse a MapTiler.
-                      maxStale: const Duration(days: 30),
-                      store: widget.tileStore,
-                    ),
+                    tileSize: AppConfig.tileSize, // 512: ~⅓ de requests (doc 08)
+                    // Caché 30 días + contador de requests facturables.
+                    tileProvider: buildCountingTileProvider(widget.tileStore),
                   ),
                   PolygonLayer(
                     polygons: [
@@ -133,6 +197,17 @@ class _MapScreenState extends State<MapScreen> {
                   productionPerMinute: _viewModel.productionPerMinute,
                   zoom: _viewModel.zoom,
                 ),
+              ),
+              const Positioned(
+                left: 8,
+                bottom: 8,
+                child: SafeArea(child: TileRequestBadge()),
+              ),
+              Positioned(
+                bottom: 12,
+                left: 0,
+                right: 0,
+                child: SafeArea(child: Center(child: _zoomBar())),
               ),
             ],
           );
@@ -173,6 +248,20 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
             child: const Icon(Icons.pest_control),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton(
+            heroTag: 'iso',
+            mini: true,
+            backgroundColor: Colors.purple.shade600,
+            // ADR 0007 Rev 3: preview del template de escena en isométrico 2.5D
+            // con cajas placeholder (no necesita OSM).
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const IsoTemplatePreviewScreen(),
+              ),
+            ),
+            child: const Icon(Icons.view_in_ar),
           ),
           const SizedBox(height: 8),
           FloatingActionButton(

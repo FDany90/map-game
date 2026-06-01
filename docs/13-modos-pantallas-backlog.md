@@ -17,6 +17,23 @@
   (local)      (macro)      (GPS vivo)     (instanciado)
 ```
 
+## Bandas de zoom por modo (DECIDIDO 2026-05-31)
+
+Para controlar el costo de tiles (objetivo **≤100-200 requests/jugador/mes**), el juego usa
+**bandas de zoom discretas por modo** en vez de zoom libre 3→20. Ver
+[08-cost-analysis-tiles.md](08-cost-analysis-tiles.md) (sección "Diseño para un presupuesto
+objetivo").
+
+| Modo | Zoom | Área | Qué se ve |
+|---|---|---|---|
+| **Base local** | **z18** (cap actual) | tu barrio (acotado) | hexágonos, base, zombies, edificios |
+| **Mapa-ciudad** (exploración NO-GPS) | **z11-12** | tu ciudad/metro (bbox) | **iconos** del backend: clanes, boss, dungeons, POIs |
+| **País / región** | **z4-7** | macro | regiones por clan, ranking |
+
+- **Sin z13-17 de roam libre** → se salta entre LODs, no hay zoom continuo.
+- **`maxZoom` capeado a 18** en `AppConfig` (era 20).
+- Iconos = backend → $0 de tiles; solo paga el fondo de mapa (barato a z bajo).
+
 ## Pantallas / modos
 
 ### 1. Menú (principal)
