@@ -50,6 +50,10 @@ dependencies:
   # vía dio_cache_interceptor; lo declaramos explícito para importarlo.
   dio: ^5.9.0
 
+  # Motor 2D para la escena de combate (ADR 0001/0006): game loop, joystick,
+  # sprites. Acotado al combate; el mapa sigue en flutter_map.
+  flame: ^1.18.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

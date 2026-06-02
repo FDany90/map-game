@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../domain/models/scene_template.dart';
+import 'combat_play_screen.dart';
 import 'widgets/iso_template_painter.dart';
 
 /// Preview del **template de escena de combate en isométrico 2.5D** con cajas
@@ -34,6 +35,23 @@ class _IsoTemplatePreviewScreenState extends State<IsoTemplatePreviewScreen> {
         title: const Text('Template iso (preview)'),
         backgroundColor: Colors.black87,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.play_arrow),
+            tooltip: 'Jugar (mover con joystick)',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CombatPlayScreen(
+                  template: _template,
+                  zoom: _zoom,
+                  skew: _skew,
+                  pitch: _pitch,
+                  panX: _panX,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [

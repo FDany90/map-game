@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-05-31** (Inspector OSM + Fase 2 + pivot a *descriptor + templates* — ADR 0007 Rev 2 + **vuelta a isométrico 2.5D con sprites pre-renderizados + preview iso de templates** — ADR 0007 Rev 3)
+> Última actualización: **2026-06-01** (escena de combate **isométrica 2.5D jugable en Flame** — jugador dungeon + cámara + zombies/auto-disparo; cámara ¾ lockeada; control de costo de tiles con bandas de zoom + monitor. Antes: Inspector OSM, pivot a *descriptor + templates* ADR 0007 Rev 2/3)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -277,8 +277,23 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       `ui/features/combat_scene/views/widgets/iso_template_painter.dart` (proyección iso ¾, calle vertical,
       cajas placeholder con fachada/techo/sombra) y `iso_template_preview_screen.dart` (selector de template
       + sliders de inclinación/cámara en vivo). **Entrada:** FAB violeta 🟣 (`view_in_ar`) en el mapa — no
-      necesita OSM. Tests: `scene_template_test.dart`. **Pendiente:** conectar el descriptor OSM (Fase A) para
-      elegir/orientar el template real en vez del fijo.
+      necesita OSM. Tests: `scene_template_test.dart`.
+    - ✅ **HECHO (2026-06-01) — cámara ¾ ELEGIDA + lockeada:** tras tunear con los sliders (zoom/cámara X/
+      inclinación iso/profundidad), se fijó la config del escenario: **zoom 4.10 · skew 0.35 · pitch 0.49 ·
+      panX 0.01** (default en `IsoTemplatePainter` y en la preview screen). **Es el ángulo al que se
+      renderizan los sprites en Blender** (ADR 0007 Rev 3). Ajustes de template: calle ancha (0.40), veredas
+      angostas (0.08), edificios pegados al borde (u ±0.42, **fila alineada sin jitter**), autos sobre la
+      calzada, calle larga (l 1.9). El painter recorta a sus límites (`clipRect`).
+    - ✅ **HECHO (2026-06-01) — escena de combate JUGABLE en Flame (ADR 0001/0006):** se agregó `flame: ^1.18`
+      y se migró la escena a Flame. `ui/features/combat_scene/game/combat_game.dart` (`CombatGame extends
+      FlameGame`): **jugador se mueve estilo dungeon** con `JoystickComponent`, **cámara lo sigue** (lerp por
+      `cameraV`), **zombies** spawnean adelante y caminan hacia él, **auto-disparo** al más cercano en rango
+      (línea), contador de **Kills**. El escenario reusa `IsoTemplatePainter` en **modo cámara** (param
+      `cameraV` + `player`/`enemies`/`shots`). `combat_play_screen.dart` (GameWidget). **Entrada:** FAB violeta
+      → ▶ play en el AppBar. Tuning inicial: spawn 1s (máx 14), zombie 0.12, disparo 0.45s rango 0.7, kill de
+      1 tiro. **Pendiente de balance** (ritmo/velocidad/rango) y vida del jugador. Verificado en emulador.
+    - ⬜ **Próximos:** (a) **balancear combate** + vida del jugador; (b) **descriptor OSM (Fase A)** para que
+      la calle real elija/oriente el template; (c) **sprites** (pipeline Blender al ángulo ¾ lockeado).
     - ⬜ **Fase A del pivot (descriptor):** implementar `SceneDescriptor` (zona ya está + topología +
       name + oneway/lanes/surface/lit + lista de landmarks/POIs) como **lógica pura testeable**, y la
       **detección de topología** (cruces/ramas/ángulos), y el **selector** descriptor→template orientado.
