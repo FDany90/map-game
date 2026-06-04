@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-06-01** (escena de combate **isométrica 2.5D jugable en Flame** — jugador dungeon + cámara + zombies/auto-disparo; cámara ¾ lockeada; control de costo de tiles con bandas de zoom + monitor. Antes: Inspector OSM, pivot a *descriptor + templates* ADR 0007 Rev 2/3)
+> Última actualización: **2026-06-04** (combate Flame con **vida del jugador + Game Over + balance** [zombies muerden, rampa de dificultad]; **tiles MapTiler 512px nativo** adoptado [`zoomOffset:-1`] → ~⅓ requests + letras default. Antes: escena de combate **isométrica 2.5D jugable en Flame**, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -59,9 +59,11 @@ capa opcional = **Modo Exploración** con GPS. Hecho por **un desarrollador en s
   un **monitor de requests in-app** (`TileRequestMonitor` + chip "🛰️ MapTiler: N", toca→resumen por
   zoom en consola) para medir por prueba, **botones de banda de zoom** (Ciudad z10/Barrio z14/Base
   z18 + recenter, saltos con `move()` instantáneo = sin tiles intermedios) y **zoom continuo
-  desactivado** (pinch/doble-tap/scroll off → el zoom solo cambia por banda). **Experimento
-  `tileSize: 512` REVERTIDO:** en flutter_map 7 desplazaba el encuadre a escala país (no de barrio);
-  el ahorro por tile-grande requiere config de CRS/`zoomOffset`, a futuro. Ver
+  desactivado** (pinch/doble-tap/scroll off → el zoom solo cambia por banda). **Tiles `tileSize: 512`
+  nativo ADOPTADO (2026-06-04):** MapTiler ya entrega 512px (el SKU se factura así); declararlos 256
+  los achicaba (etiquetas chicas) y pedía 4× más tiles. Con **`tileSize: 512` + `zoomOffset: -1`**
+  (la cuenta da `2^offset=½`) → ~⅓ de requests + letras a tamaño default. **Resuelve el bug del
+  intento del 2026-05-31** (sin offset abría a escala país). Validado en emulador (pide z16). Ver
   [08-cost-analysis-tiles.md](08-cost-analysis-tiles.md) +
   [13-modos-pantallas-backlog.md](13-modos-pantallas-backlog.md).
 
@@ -290,10 +292,17 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       `cameraV`), **zombies** spawnean adelante y caminan hacia él, **auto-disparo** al más cercano en rango
       (línea), contador de **Kills**. El escenario reusa `IsoTemplatePainter` en **modo cámara** (param
       `cameraV` + `player`/`enemies`/`shots`). `combat_play_screen.dart` (GameWidget). **Entrada:** FAB violeta
-      → ▶ play en el AppBar. Tuning inicial: spawn 1s (máx 14), zombie 0.12, disparo 0.45s rango 0.7, kill de
-      1 tiro. **Pendiente de balance** (ritmo/velocidad/rango) y vida del jugador. Verificado en emulador.
-    - ⬜ **Próximos:** (a) **balancear combate** + vida del jugador; (b) **descriptor OSM (Fase A)** para que
-      la calle real elija/oriente el template; (c) **sprites** (pipeline Blender al ángulo ¾ lockeado).
+      → ▶ play en el AppBar. Verificado en emulador.
+    - ✅ **HECHO (2026-06-04) — vida del jugador + Game Over + balance:** el jugador tiene **HP (100)**;
+      los zombies que lo alcanzan **muerden** (daño con cooldown por zombie: `_biteInterval` 0.7s,
+      `_biteDamage` 9, `_contactRange` 0.085), con **flash rojo** de feedback + **barra de vida** en el HUD;
+      al llegar a 0 hay **Game Over** (overlay Flame `kGameOverOverlay` con Bajas + Reintentar/Salir;
+      `pauseEngine` + `restart()`). Balance: **rampa de dificultad** (spawn de 1.1s→0.45s en 90s),
+      **zombies de 2 tiros**, disparo 0.40s rango 0.75, máx 16. El skill pasa a ser **kitear** (el jugador
+      es más rápido). `flutter analyze` limpio. **Pendiente:** play-test de tuning fino + vida del jugador
+      regenerable/curación (a futuro).
+    - ⬜ **Próximos:** (b) **descriptor OSM (Fase A)** para que la calle real elija/oriente el template;
+      (c) **sprites** (pipeline Blender al ángulo ¾ lockeado).
     - ⬜ **Fase A del pivot (descriptor):** implementar `SceneDescriptor` (zona ya está + topología +
       name + oneway/lanes/surface/lit + lista de landmarks/POIs) como **lógica pura testeable**, y la
       **detección de topología** (cruces/ramas/ángulos), y el **selector** descriptor→template orientado.

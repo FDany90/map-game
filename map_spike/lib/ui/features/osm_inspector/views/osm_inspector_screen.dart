@@ -123,6 +123,7 @@ class _OsmInspectorScreenState extends State<OsmInspectorScreen> {
               urlTemplate: AppConfig.tileUrlTemplate,
               userAgentPackageName: AppConfig.userAgentPackageName,
               tileSize: AppConfig.tileSize,
+              zoomOffset: AppConfig.tileZoomOffset,
               tileProvider: buildCountingTileProvider(widget.tileStore),
             ),
             // Áreas (leisure): polígonos verdes.

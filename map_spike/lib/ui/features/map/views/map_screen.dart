@@ -161,7 +161,8 @@ class _MapScreenState extends State<MapScreen> {
                   TileLayer(
                     urlTemplate: AppConfig.tileUrlTemplate,
                     userAgentPackageName: AppConfig.userAgentPackageName,
-                    tileSize: AppConfig.tileSize, // 512: ~⅓ de requests (doc 08)
+                    tileSize: AppConfig.tileSize, // 512 nativo: ~⅓ requests (doc 08)
+                    zoomOffset: AppConfig.tileZoomOffset,
                     // Caché 30 días + contador de requests facturables.
                     tileProvider: buildCountingTileProvider(widget.tileStore),
                   ),

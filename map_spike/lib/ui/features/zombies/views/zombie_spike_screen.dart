@@ -74,6 +74,7 @@ class _ZombieSpikeScreenState extends State<ZombieSpikeScreen> {
                     urlTemplate: AppConfig.tileUrlTemplate,
                     userAgentPackageName: AppConfig.userAgentPackageName,
                     tileSize: AppConfig.tileSize,
+                    zoomOffset: AppConfig.tileZoomOffset,
                     tileProvider: buildCountingTileProvider(widget.tileStore),
                   ),
                   // Calles cargadas (los "carriles" por donde caminan).

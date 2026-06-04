@@ -16,11 +16,20 @@ class AppConfig {
   /// los tiles para el mismo detalle → se evitan (control de costo, doc 08).
   static const double maxZoom = 18;
 
-  /// Tamaño de tile. **Experimento 512 revertido (2026-05-31):** en flutter_map 7
-  /// `tileSize: 512` desplazaba el encuadre varios niveles (el mapa abría a escala
-  /// país, no de barrio). Queda en 256 (default). El ahorro de requests por
-  /// tile-grande hay que lograrlo con config de CRS/`zoomOffset`, a futuro. Doc 08.
-  static const double tileSize = 256;
+  /// Tamaño de tile. **MapTiler entrega los tiles en 512px nativo** (el SKU se
+  /// factura como "Rendered maps (512px)"). Declararlos como 512 (en vez de 256)
+  /// hace que cada request **cubra 4× el área** → ~⅓ de los requests para la misma
+  /// vista (doc 08, palanca #2 tras la caché) **y** las etiquetas se ven al tamaño
+  /// default (antes se achicaban al downscalear 512→256).
+  ///
+  /// Va de la mano de [tileZoomOffset]: sin él, flutter_map pide el z/x/y de un
+  /// esquema 256 y el mapa abre desplazado (el bug del intento del 2026-05-31).
+  static const double tileSize = 512;
+
+  /// Compensa el esquema 512 de MapTiler: con tiles de 512 nativo, el z visible
+  /// corresponde a `z-1` en el esquema 256 que asume flutter_map. Verificar el
+  /// encuadre en emulador; si queda corrido un nivel, este es el knob.
+  static const double tileZoomOffset = -1;
 
   // --- MapTiler ---
   static const String mapStyle = 'streets-v2-dark';

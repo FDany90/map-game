@@ -91,9 +91,27 @@ MapTiler sobre todo la **primera vez** y cuando expira la caché o explora zonas
 
 1. **Caché agresiva** (más días en disco) — la principal. Aplica también a exploración:
    revisitar las mismas calles = gratis.
-2. **Pocos niveles de zoom** — el prototipo usa un solo zoom (ver ADR 0002).
-3. **Limitar el zoom máximo en movimiento** (Exploración) — menos detalle al moverse.
-4. **Limitar el radio de pan** — no cargar medio país.
+2. **Tiles de 512px nativo** (`tileSize: 512` + `zoomOffset: -1`) — **adoptado 2026-06-04** (ver
+   abajo): ~⅓ de los requests para la misma vista.
+3. **Pocos niveles de zoom** — el prototipo usa un solo zoom (ver ADR 0002).
+4. **Limitar el zoom máximo en movimiento** (Exploración) — menos detalle al moverse.
+5. **Limitar el radio de pan** — no cargar medio país.
+
+### Tiles 512px nativo (DECIDIDO + validado 2026-06-04)
+
+**MapTiler ya entrega los tiles en 512px** (el SKU facturado es literalmente *"Rendered maps
+(512px)"*). El prototipo los declaraba como `tileSize: 256`, así que flutter_map **achicaba**
+cada imagen a la mitad (→ etiquetas chicas, la queja del usuario) **y pedía ~4× más tiles** para
+tapar la misma pantalla — pagando precio de 512 sin el beneficio.
+
+Se pasó a **`tileSize: 512` + `zoomOffset: -1`** (`AppConfig.tileSize` / `AppConfig.tileZoomOffset`,
+aplicado a los 3 `TileLayer`). El `-1` no es a ojo: para que la grilla de 512 llene el mundo que
+flutter_map calcula en base 256, la cuenta da `2^offset = ½`. **Esto resuelve el bug del intento
+del 2026-05-31** (que sin offset abría a escala país).
+
+**Validado en emulador (2026-06-04):** encuadre de barrio correcto a zoom 17 (pide tiles **z16**,
+un nivel más grueso → ¼ de tiles por terreno), **etiquetas a tamaño default** (se arregló solo al
+no downscalear), y el monitor in-app confirma los requests z16. Es la **palanca #2** tras la caché.
 
 ## Diseño para un presupuesto objetivo — bandas de zoom (decisión 2026-05-31)
 
