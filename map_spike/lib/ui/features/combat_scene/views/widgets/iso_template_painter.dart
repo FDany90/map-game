@@ -27,6 +27,8 @@ class IsoTemplatePainter extends CustomPainter {
     this.player,
     this.enemies,
     this.shots,
+    this.pickups,
+    this.labelSlots = true,
   });
 
   final SceneTemplate template;
@@ -39,11 +41,15 @@ class IsoTemplatePainter extends CustomPainter {
   /// Posición del jugador en street-space `(u,v)`; se dibuja como billboard.
   final ({double u, double v})? player;
 
-  /// Zombies a dibujar (billboards verdes), en street-space.
-  final List<({double u, double v})>? enemies;
+  /// Zombies a dibujar (billboards verdes), en street-space. [hpFrac] (1 = sano)
+  /// dibuja una barrita de vida sobre el zombie cuando está dañado.
+  final List<({double u, double v, double hpFrac})>? enemies;
 
   /// Disparos activos (línea jugador→objetivo), en street-space.
   final List<({double u, double v, double tu, double tv})>? shots;
+
+  /// Colectables dropeados (en street-space). `kind`: 0 = munición, 1 = vida.
+  final List<({double u, double v, int kind})>? pickups;
 
   /// Desplazamiento horizontal de cámara, en fracción del ancho (−izq … +der).
   final double panX;
@@ -59,7 +65,18 @@ class IsoTemplatePainter extends CustomPainter {
   /// el ancho y los edificios quedan como borde a los costados (ADR 0007 Rev 1).
   final double zoom;
 
+  /// Dibujar las etiquetas de los slots (números de piso "2p", "POI", etc.).
+  /// En combate se apaga: declutter + evita un `TextPainter.layout()` por edificio
+  /// por frame (la causa principal de los hitches de GC).
+  final bool labelSlots;
+
   static const double _levelPx = 6.5; // altura en pantalla por piso (× zoom)
+
+  // Cachés estáticas: el painter se reconstruye cada frame (lo crea el renderer de
+  // Flame), así que cualquier caché por-instancia sería inútil. Estas persisten.
+  static Paint? _bgPaint;
+  static Size? _bgPaintSize;
+  static final Map<String, TextPainter> _labelCache = {};
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -68,16 +85,18 @@ class IsoTemplatePainter extends CustomPainter {
     // dropdown de arriba.
     canvas.clipRect(Offset.zero & size);
 
-    // Fondo con un degradé sutil (cielo/calle al fondo).
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
+    // Fondo con un degradé sutil (cielo/calle al fondo). El shader se cachea: antes
+    // se recreaba cada frame (allocation + GC).
+    if (_bgPaint == null || _bgPaintSize != size) {
+      _bgPaintSize = size;
+      _bgPaint = Paint()
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [Color(0xFF1A1E25), Color(0xFF262B33)],
-        ).createShader(Offset.zero & size),
-    );
+        ).createShader(Offset.zero & size);
+    }
+    canvas.drawRect(Offset.zero & size, _bgPaint!);
 
     final z = zoom.clamp(1.0, 6.0);
     final cx = size.width / 2 + panX * size.width;
@@ -110,10 +129,13 @@ class IsoTemplatePainter extends CustomPainter {
     }
     _drawStreetCenterLine(canvas, project);
 
-    // 2) Marcadores de spawn (sobre el piso, bajo los edificios).
-    for (final s in template.slots
-        .where((s) => s.kind == SlotKind.spawnPlayer || s.kind == SlotKind.spawnEnemy)) {
-      _drawSpawn(canvas, s, project);
+    // 2) Marcadores de spawn (sobre el piso). Solo en preview: en combate las
+    // entidades vivas (jugador/zombies) los hacen redundantes.
+    if (labelSlots) {
+      for (final s in template.slots.where((s) =>
+          s.kind == SlotKind.spawnPlayer || s.kind == SlotKind.spawnEnemy)) {
+        _drawSpawn(canvas, s, project);
+      }
     }
 
     // 3) Cajas con altura, de lejos (v alto) hacia cerca (v bajo): painter's algo.
@@ -123,11 +145,18 @@ class IsoTemplatePainter extends CustomPainter {
       _drawBox(canvas, s, project);
     }
 
+    // 3.5) Colectables (sobre el piso, debajo de las entidades).
+    if (pickups != null) {
+      for (final p in pickups!) {
+        _drawPickup(canvas, project(p.u, p.v, 0), levelPx, p.kind);
+      }
+    }
+
     // 4) Zombies (billboards verdes), de lejos hacia cerca.
     if (enemies != null) {
       final sorted = [...enemies!]..sort((a, b) => b.v.compareTo(a.v));
       for (final e in sorted) {
-        _drawEnemy(canvas, project(e.u, e.v, 0), levelPx);
+        _drawEnemy(canvas, project(e.u, e.v, 0), levelPx, e.hpFrac);
       }
     }
 
@@ -150,7 +179,8 @@ class IsoTemplatePainter extends CustomPainter {
   }
 
   /// Billboard placeholder de un zombie (verde, algo más bajo que el jugador).
-  void _drawEnemy(Canvas canvas, Offset ground, double levelPx) {
+  /// [hpFrac] < 1 dibuja una barrita de vida encima (feedback de daño).
+  void _drawEnemy(Canvas canvas, Offset ground, double levelPx, double hpFrac) {
     final h = 2.8 * levelPx;
     canvas.drawOval(
       Rect.fromCenter(center: ground, width: h * 0.55, height: h * 0.2),
@@ -166,6 +196,41 @@ class IsoTemplatePainter extends CustomPainter {
       h * 0.17,
       Paint()..color = const Color(0xFF8FD46E),
     );
+    // Barra de vida del zombie (solo si está dañado).
+    if (hpFrac < 1) {
+      final bw = h * 0.4, top = ground.dy - h - h * 0.42;
+      final left = ground.dx - bw / 2;
+      canvas.drawRect(Rect.fromLTWH(left, top, bw, 3),
+          Paint()..color = Colors.black.withValues(alpha: 0.5));
+      canvas.drawRect(Rect.fromLTWH(left, top, bw * hpFrac, 3),
+          Paint()..color = const Color(0xFFE5484D));
+    }
+  }
+
+  /// Colectable: munición (caja amarilla) o vida (cruz verde), con halo.
+  void _drawPickup(Canvas canvas, Offset ground, double levelPx, int kind) {
+    final s = levelPx * 0.9;
+    final c = Offset(ground.dx, ground.dy - s * 0.5);
+    final isAmmo = kind == 0;
+    final color = isAmmo ? const Color(0xFFF2C53D) : const Color(0xFF46C66B);
+    // Halo en el piso.
+    canvas.drawCircle(ground, s * 0.55,
+        Paint()..color = color.withValues(alpha: 0.22));
+    if (isAmmo) {
+      final r = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: c, width: s * 0.7, height: s * 0.7),
+        Radius.circular(s * 0.12),
+      );
+      canvas.drawRRect(r, Paint()..color = color);
+    } else {
+      // Cruz médica.
+      final arm = s * 0.5, th = s * 0.18;
+      final p = Paint()..color = color;
+      canvas.drawRect(
+          Rect.fromCenter(center: c, width: arm, height: th), p);
+      canvas.drawRect(
+          Rect.fromCenter(center: c, width: th, height: arm), p);
+    }
   }
 
   /// Billboard placeholder del jugador: sombra elíptica + cuerpo cápsula + cabeza
@@ -299,10 +364,13 @@ class IsoTemplatePainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    // Etiqueta sobre la fachada.
-    final mid = Offset.lerp(base[0], top[1], 0.5)!;
-    final text = s.label ?? '${s.levels.round()}p';
-    _label(canvas, mid, text, Colors.white.withValues(alpha: 0.9));
+    // Etiqueta sobre la fachada. En combate solo los landmarks (POI con nombre)
+    // mantienen su rótulo; los números de piso y "auto" se ocultan.
+    if (labelSlots || s.kind == SlotKind.cornerLandmark) {
+      final mid = Offset.lerp(base[0], top[1], 0.5)!;
+      final text = s.label ?? '${s.levels.round()}p';
+      _label(canvas, mid, text, Colors.white.withValues(alpha: 0.9));
+    }
   }
 
   _BoxPalette _palette(SlotKind kind) => switch (kind) {
@@ -327,13 +395,16 @@ class IsoTemplatePainter extends CustomPainter {
       };
 
   void _label(Canvas canvas, Offset center, String text, Color color) {
-    final tp = TextPainter(
+    // Caché de TextPainter por (texto, color): los mismos rótulos se repiten cada
+    // frame; layout() es caro, así que se hace una sola vez por string.
+    final key = '$text|${color.toARGB32()}';
+    final tp = _labelCache[key] ??= (TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
       ),
       textDirection: TextDirection.ltr,
-    )..layout();
+    )..layout());
     tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
   }
 

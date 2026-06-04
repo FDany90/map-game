@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-06-04** (combate Flame con **vida del jugador + Game Over + balance** [zombies muerden, rampa de dificultad]; **tiles MapTiler 512px nativo** adoptado [`zoomOffset:-1`] → ~⅓ requests + letras default. Antes: escena de combate **isométrica 2.5D jugable en Flame**, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
+> Última actualización: **2026-06-04** (combate Flame **Bloque A**: arma+cargador con recarga auto, HP de zombies, victoria por cupo, colectables drop de zombies, economía, joystick centrado, **perf optimizada** [~57 FPS en profile]; antes ese día: vida del jugador + Game Over + balance, y **tiles MapTiler 512px nativo** [`zoomOffset:-1`] → ~⅓ requests + letras default. Más atrás: escena iso 2.5D jugable en Flame, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -301,8 +301,24 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       **zombies de 2 tiros**, disparo 0.40s rango 0.75, máx 16. El skill pasa a ser **kitear** (el jugador
       es más rápido). `flutter analyze` limpio. **Pendiente:** play-test de tuning fino + vida del jugador
       regenerable/curación (a futuro).
-    - ⬜ **Próximos:** (b) **descriptor OSM (Fase A)** para que la calle real elija/oriente el template;
-      (c) **sprites** (pipeline Blender al ángulo ¾ lockeado).
+    - ✅ **HECHO (2026-06-04) — Bloque A "loop de combate completo" + perf:** se decidió por consulta
+      (recarga auto / victoria por cupo / drops de zombies). **Arma con cargador** (`magazineSize` 12) con
+      **recarga automática** al vaciarse (`reloadTime` 1.4s, barra "Recargando…"); **HP de zombies** como stat
+      (`zombieHp` 2) + **barrita de vida** sobre el zombie dañado; **victoria por cupo** (`targetKills` 20 →
+      overlay `kVictoryOverlay` "Escenario completado"; el spawn se corta al cubrir el cupo); **colectables
+      drop de zombies** (munición caja amarilla / vida cruz verde, se juntan caminando encima; la munición
+      corta la recarga); **economía** (+5 recursos/kill). **Joystick centrado** en el eje horizontal, ~25%
+      desde abajo. **HUD** vida/objetivo/recursos/munición. **Perf:** se cachearon el **gradiente de fondo** y
+      los **`TextPainter`** (eran un `layout()` por edificio por frame = causa de los hitches de GC) y se
+      apagan las etiquetas de slot en combate (`labelSlots:false`). **Contador de FPS dev** (`CombatGame.showFps`).
+      **Medición (profile, emulador): ~57 FPS** → los freezes eran **debug+emulador, no el juego**. 47 tests verdes.
+    - 📝 **NOTA / backlog (feature pedida 2026-06-04, NO implementada) — crítico en la cabeza como STAT del
+      personaje:** que matar un zombie cueste **5 disparos** por defecto, pero el personaje tenga una **chance de
+      golpe crítico a la cabeza** que lo mata **de un tiro**. Va dentro del sistema de **estadísticas del
+      personaje** (futuro): `zombieHp` sube a 5 y el disparo tira `critChance` → si crítico, daño = HP del zombie.
+    - ⬜ **Próximos:** Bloque B (escenario): **cuadra entera + esquina** (template más largo, preferir corner) y
+      **autos con collider** (obstáculos para jugador y zombies). Luego (b) **descriptor OSM (Fase A)** para que
+      la calle real elija/oriente el template; (c) **sprites** (pipeline Blender al ángulo ¾ lockeado).
     - ⬜ **Fase A del pivot (descriptor):** implementar `SceneDescriptor` (zona ya está + topología +
       name + oneway/lanes/surface/lit + lista de landmarks/POIs) como **lógica pura testeable**, y la
       **detección de topología** (cruces/ramas/ángulos), y el **selector** descriptor→template orientado.

@@ -45,7 +45,9 @@ class _CombatPlayScreenState extends State<CombatPlayScreen> {
             game: _game,
             overlayBuilderMap: {
               kGameOverOverlay: (context, CombatGame game) =>
-                  _GameOverOverlay(game: game),
+                  _EndOverlay(game: game, victory: false),
+              kVictoryOverlay: (context, CombatGame game) =>
+                  _EndOverlay(game: game, victory: true),
             },
           ),
           const Positioned(
@@ -53,15 +55,16 @@ class _CombatPlayScreenState extends State<CombatPlayScreen> {
             left: 0,
             child: SafeArea(child: BackButton(color: Colors.white)),
           ),
+          // Id del template (debug) abajo-centro, lejos del HUD y el joystick.
           Positioned(
-            top: 0,
+            bottom: 6,
+            left: 0,
             right: 0,
             child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
+              child: Center(
                 child: Text(
-                  '${widget.template.id} · movés con el joystick',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  widget.template.id,
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
                 ),
               ),
             ),
@@ -72,37 +75,41 @@ class _CombatPlayScreenState extends State<CombatPlayScreen> {
   }
 }
 
-/// Overlay de fin de partida: muestra las bajas y permite reintentar.
-class _GameOverOverlay extends StatelessWidget {
-  const _GameOverOverlay({required this.game});
+/// Overlay de fin de escenario: victoria (cupo cumplido) o derrota (vida a 0).
+class _EndOverlay extends StatelessWidget {
+  const _EndOverlay({required this.game, required this.victory});
 
   final CombatGame game;
+  final bool victory;
 
   @override
   Widget build(BuildContext context) {
+    final title = victory ? 'Escenario completado' : 'Te alcanzaron';
+    final color = victory ? const Color(0xFF46C66B) : Colors.redAccent;
     return Container(
       color: Colors.black.withValues(alpha: 0.7),
       alignment: Alignment.center,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'Te alcanzaron',
+          Icon(victory ? Icons.military_tech : Icons.dangerous,
+              color: color, size: 48),
+          const SizedBox(height: 8),
+          Text(
+            title,
             style: TextStyle(
-                color: Colors.redAccent,
-                fontSize: 30,
-                fontWeight: FontWeight.bold),
+                color: color, fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           Text(
-            'Bajas: ${game.kills}',
-            style: const TextStyle(color: Colors.white, fontSize: 20),
+            'Bajas: ${game.kills}   ·   Recursos: ${game.resources}',
+            style: const TextStyle(color: Colors.white, fontSize: 18),
           ),
           const SizedBox(height: 28),
           FilledButton.icon(
             onPressed: game.restart,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reintentar'),
+            icon: Icon(victory ? Icons.replay : Icons.refresh),
+            label: Text(victory ? 'Jugar de nuevo' : 'Reintentar'),
           ),
           const SizedBox(height: 8),
           TextButton(
