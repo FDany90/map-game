@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-06-04** (combate Flame **Bloque A**: arma+cargador con recarga auto, HP de zombies, victoria por cupo, colectables drop de zombies, economía, joystick centrado, **perf optimizada** [~57 FPS en profile]; antes ese día: vida del jugador + Game Over + balance, y **tiles MapTiler 512px nativo** [`zoomOffset:-1`] → ~⅓ requests + letras default. Más atrás: escena iso 2.5D jugable en Flame, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
+> Última actualización: **2026-06-04** (combate Flame **Bloque B**: escenario de **cuadra entera con esquina al fondo** [template `residential.block`, área jugable derivada del largo de la calle] + **autos con collider**; antes ese día **Bloque A**: arma+cargador con recarga auto, HP de zombies, victoria por cupo, colectables drop de zombies, economía, joystick centrado, **perf optimizada** [~57 FPS en profile]; y antes: vida del jugador + Game Over + balance, y **tiles MapTiler 512px nativo** [`zoomOffset:-1`] → ~⅓ requests + letras default. Más atrás: escena iso 2.5D jugable en Flame, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -316,9 +316,19 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       personaje:** que matar un zombie cueste **5 disparos** por defecto, pero el personaje tenga una **chance de
       golpe crítico a la cabeza** que lo mata **de un tiro**. Va dentro del sistema de **estadísticas del
       personaje** (futuro): `zombieHp` sube a 5 y el disparo tira `critChance` → si crítico, daño = HP del zombie.
-    - ⬜ **Próximos:** Bloque B (escenario): **cuadra entera + esquina** (template más largo, preferir corner) y
-      **autos con collider** (obstáculos para jugador y zombies). Luego (b) **descriptor OSM (Fase A)** para que
-      la calle real elija/oriente el template; (c) **sprites** (pipeline Blender al ángulo ¾ lockeado).
+    - ✅ **HECHO (2026-06-04) — Bloque B (escenario):** **(1) cuadra entera + esquina:** nuevo template
+      `residential.block` (calle `l 2.2` con **cruce/esquina al fondo** + landmark `Coto`, edificios lineando
+      ambos lados), **default de combate** (primero en `SceneTemplates.all`). El **área jugable se deriva del
+      largo de la calle** (`SceneTemplate.playBoundsV` = `v ± l/2` con margen; para `l 1.9` da los límites
+      históricos → sin regresión), así una calle más larga = cuadra más grande sin tocar el motor. La línea de
+      carril del painter también se deriva del slot `street`. **(2) autos con collider:** los slots `prop` se
+      vuelven rects de colisión (`_pushOutOfCars`, círculo-AABB con `_bodyR` 0.045); jugador y zombies no los
+      atraviesan (cobertura táctica). Test del template relajado a `v∈[-0.4,1.4]` (la esquina al fondo). 47 tests
+      verdes; verificado en emulador (jugador frenado por el auto, cuadra atravesable, victoria). **Pendiente
+      menor:** la esquina al fondo conviene mirarla con calma + tuning del template.
+    - ⬜ **Próximos:** (b) **descriptor OSM (Fase A)** para que la calle real elija/oriente el template;
+      (c) **sprites** (pipeline Blender al ángulo ¾ lockeado). Backlog: **crítico a la cabeza** como stat
+      (zombies de 5 tiros + `critChance`) y tuning fino de combate.
     - ⬜ **Fase A del pivot (descriptor):** implementar `SceneDescriptor` (zona ya está + topología +
       name + oneway/lanes/surface/lit + lista de landmarks/POIs) como **lógica pura testeable**, y la
       **detección de topología** (cruces/ramas/ángulos), y el **selector** descriptor→template orientado.

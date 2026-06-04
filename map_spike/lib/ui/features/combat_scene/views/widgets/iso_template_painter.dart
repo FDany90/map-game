@@ -279,9 +279,12 @@ class IsoTemplatePainter extends CustomPainter {
   }
 
   void _drawStreetCenterLine(Canvas canvas, Offset Function(double, double, double) p) {
-    // Línea de carril punteada por el eje (vende los "2 sentidos"), a lo largo
-    // de toda la calle (que ahora es larga: v ≈ −0.4 … 1.4).
-    const dashes = 24, vMin = -0.4, vMax = 1.4;
+    // Línea de carril punteada por el eje (vende los "2 sentidos"), a lo largo de
+    // toda la calle (su extensión real, derivada del slot `street` del template).
+    final street = template.streetSlot;
+    final vMin = street != null ? street.v - street.l / 2 : -0.4;
+    final vMax = street != null ? street.v + street.l / 2 : 1.4;
+    const dashes = 28;
     for (var i = 0; i < dashes; i++) {
       if (i.isOdd) continue;
       final v0 = vMin + (vMax - vMin) * (i / dashes);

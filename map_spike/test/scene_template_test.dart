@@ -28,10 +28,12 @@ void main() {
       }
     });
 
-    test('los slots caen en street-space válido (u∈[-1,1] del eje, v∈[0,1])', () {
+    test('los slots caen en street-space válido (u∈[-1,1] del eje, v a lo largo)', () {
+      // v se normaliza a lo largo de la calle; una cuadra (residential.block) llega
+      // a la esquina del fondo (~1.3) y arranca antes del 0 (~-0.25).
       for (final t in SceneTemplates.all) {
         for (final s in t.slots) {
-          expect(s.v, inInclusiveRange(-0.1, 1.1), reason: '${t.id} v=${s.v}');
+          expect(s.v, inInclusiveRange(-0.4, 1.4), reason: '${t.id} v=${s.v}');
           expect(s.u, inInclusiveRange(-1.2, 1.2), reason: '${t.id} u=${s.u}');
           expect(s.levels, greaterThanOrEqualTo(0));
         }

@@ -91,6 +91,11 @@ class CombatGame extends FlameGame {
   final List<Zombie> zombies = [];
   final List<Shot> shots = [];
 
+  /// Rects de colisión de los autos (street-space), derivados de los slots `prop`
+  /// del template. El jugador y los zombies no los atraviesan (cobertura táctica).
+  final List<({double umin, double umax, double vmin, double vmax})> _cars = [];
+  static const double _bodyR = 0.045; // "radio" del cuerpo para colisión
+
   /// Tiempo de partida (segundos) — alimenta la rampa de dificultad.
   double elapsed = 0;
 
@@ -98,10 +103,12 @@ class CombatGame extends FlameGame {
   double _spawnT = 0;
   double _fireT = 0;
 
-  // Límites del jugador en la calle.
+  // Límites del jugador en la calle. _vMin/_vMax se derivan del largo de la calle
+  // del template (cuadra más larga = más recorrido) en [onLoad].
   static const double _uLimit = 0.26;
-  static const double _vMin = -0.35;
-  static const double _vMax = 1.35;
+  late final double _vMin;
+  late final double _vMax;
+  late final double _startV; // dónde arranca el jugador (inicio de la cuadra)
   static const double _uSpeed = 0.35;
   static const double _vSpeed = 0.45;
 
@@ -126,6 +133,22 @@ class CombatGame extends FlameGame {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    // Límites jugables = largo de la calle del template; arranca al inicio.
+    final b = template.playBoundsV;
+    _vMin = b.minV;
+    _vMax = b.maxV;
+    _startV = (_vMin + 0.15).clamp(_vMin, _vMax);
+    playerV = _startV;
+    cameraV = _startV;
+    // Colliders de autos (slots prop) desde el template.
+    for (final s in template.slots.where((s) => s.kind == SlotKind.prop)) {
+      _cars.add((
+        umin: s.u - s.w / 2,
+        umax: s.u + s.w / 2,
+        vmin: s.v - s.l / 2,
+        vmax: s.v + s.l / 2,
+      ));
+    }
     add(_SceneRenderer()); // escenario + entidades (detrás)
     // Joystick centrado en el eje horizontal, ~25% desde abajo (no pegado al
     // borde inferior) para alcanzarlo con el pulgar sin estirar.
@@ -164,8 +187,8 @@ class CombatGame extends FlameGame {
     _spawnT = 0;
     _fireT = 0;
     playerU = 0;
-    playerV = 0;
-    cameraV = 0;
+    playerV = _startV;
+    cameraV = _startV;
     overlays.remove(kGameOverOverlay);
     overlays.remove(kVictoryOverlay);
     resumeEngine();
@@ -185,6 +208,9 @@ class CombatGame extends FlameGame {
     if (!d.isZero()) {
       playerU = (playerU + d.x * _uSpeed * dt).clamp(-_uLimit, _uLimit);
       playerV = (playerV - d.y * _vSpeed * dt).clamp(_vMin, _vMax);
+      final pr = _pushOutOfCars(playerU, playerV);
+      playerU = pr.u.clamp(-_uLimit, _uLimit);
+      playerV = pr.v.clamp(_vMin, _vMax);
     }
     cameraV += (playerV - cameraV) * math.min(1.0, dt * 6.0);
 
@@ -213,6 +239,9 @@ class CombatGame extends FlameGame {
         if (dist > 1e-4) {
           z.u += du / dist * _zombieSpeed * dt;
           z.v += dv / dist * _zombieSpeed * dt;
+          final zr = _pushOutOfCars(z.u, z.v);
+          z.u = zr.u;
+          z.v = zr.v;
         }
       } else {
         z.biteT += dt;
@@ -298,6 +327,36 @@ class CombatGame extends FlameGame {
 
     // 8) ¿Escenario completado?
     if (kills >= targetKills) _win();
+  }
+
+  /// Empuja una posición `(u, v)` fuera de los autos (colisión círculo-AABB con
+  /// radio [_bodyR]). Si el centro quedó dentro, sale por el eje de menor
+  /// penetración. Sirve para jugador y zombies.
+  ({double u, double v}) _pushOutOfCars(double u, double v) {
+    const r = _bodyR;
+    for (final c in _cars) {
+      final cx = u.clamp(c.umin, c.umax);
+      final cy = v.clamp(c.vmin, c.vmax);
+      final dx = u - cx, dy = v - cy;
+      final d2 = dx * dx + dy * dy;
+      if (d2 >= r * r) continue;
+      if (d2 > 1e-9) {
+        final d = math.sqrt(d2);
+        final push = r - d;
+        u += dx / d * push;
+        v += dy / d * push;
+      } else {
+        // Centro dentro del rect: empujar por el lado más cercano.
+        final toL = u - c.umin, toR = c.umax - u;
+        final toB = v - c.vmin, toT = c.vmax - v;
+        if (math.min(toL, toR) < math.min(toB, toT)) {
+          u = toL < toR ? c.umin - r : c.umax + r;
+        } else {
+          v = toB < toT ? c.vmin - r : c.vmax + r;
+        }
+      }
+    }
+    return (u: u, v: v);
   }
 
   /// Tira el drop de un zombie muerto en `(u, v)`.
