@@ -340,8 +340,11 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
     - ⬜ **Backlog mapa→combate (próximas iteraciones, decididas como pendientes):**
       **(B)** la dificultad **maneja el combate** vía `CombatConfig` (la amenaza define `targetKills`/`zombieHp`/
       ritmo; hoy el popup es informativo); **(C)** iconos de **boss/dungeon** (varios tipos; el modelo ya lo
-      soporta); **LOD/clustering** (a zoom ciudad los iconos se amontonan, doc 13); **densidad OSM** en el
-      gradiente + **H3** como id de celda; **POI real** en el nombre de la amenaza.
+      soporta); **LOD/clustering** (a zoom ciudad los iconos se amontonan, doc 13); **solo amenazas cercanas**
+      a la base/posición (niebla de guerra, no mostrar todas); **atacar = recorrido** (viajar con km+tiempo
+      reales según la ruta, doc 11) con **camino limpio** (limpiar lo intermedio antes, doc 05); **densidad
+      OSM** en el gradiente + **H3** como id de celda; **POI real** en el nombre de la amenaza. Detalle en
+      [19-mapa-amenazas.md](19-mapa-amenazas.md).
     - ⬜ **Próximos (combate):** (b) **descriptor OSM (Fase A)** para que la calle real elija/oriente el template;
       (c) **sprites** (pipeline Blender al ángulo ¾ lockeado). Backlog: **crítico a la cabeza** como stat
       (zombies de 5 tiros + `critChance`) y tuning fino de combate.

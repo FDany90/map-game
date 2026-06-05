@@ -52,5 +52,15 @@ gradiente visible (verde en el centro/spawn → rojo en los bordes). 4 tests de 
   en pantalla). El modelo ya lo soporta.
 - **LOD / clustering:** a zoom ciudad los iconos se amontonan → agrupar o mostrar solo los
   notables + contador (doc 13). Hoy se renderizan todos.
+- **Solo amenazas cercanas (visibilidad acotada) — pedido 2026-06-04:** **no mostrar todos** los
+  iconos posibles, solo los dentro de un **radio de la base/posición** del jugador (niebla de
+  guerra, doc 16). Las lejanas no se ven hasta acercarse / explorar.
+- **Atacar = recorrido, no instantáneo — pedido 2026-06-04:** una amenaza no se ataca "de una";
+  el personaje **viaja** hasta ahí con **distancia (km) y tiempo reales según la ruta** (conecta
+  con [11-zombies-calles-cost.md](11-zombies-calles-cost.md): `RoadGraph` + A\*, "tiempo según la
+  distancia real"). El botón pasaría de "Atacar" a algo como "Ir (≈X km · Y min)".
+- **Camino limpio — pedido 2026-06-04:** para llegar/atacar, la **ruta tiene que estar despejada**
+  (amenazas/territorio oscuro intermedios limpiados antes) → conecta con "limpiar antes de
+  reclamar" ([05-economia.md](05-economia.md)) y el control territorial.
 - **Densidad urbana OSM** en el gradiente de dificultad (doc 16) y **H3** como id de celda.
 - **POI real** en el nombre de la amenaza ("la esquina de Coto") desde el OSM.
