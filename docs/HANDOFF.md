@@ -1,6 +1,6 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-06-04** (combate Flame **Bloque B**: escenario de **cuadra entera con esquina al fondo** [template `residential.block`, área jugable derivada del largo de la calle] + **autos con collider**; antes ese día **Bloque A**: arma+cargador con recarga auto, HP de zombies, victoria por cupo, colectables drop de zombies, economía, joystick centrado, **perf optimizada** [~57 FPS en profile]; y antes: vida del jugador + Game Over + balance, y **tiles MapTiler 512px nativo** [`zoomOffset:-1`] → ~⅓ requests + letras default. Más atrás: escena iso 2.5D jugable en Flame, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
+> Última actualización: **2026-06-04** (**mapa → combate Slice A**: iconos de amenaza 🧟 deterministas [gradiente de dificultad, doc 16] → bottom sheet con dificultad/enemigos → "Atacar" carga la escena; antes ese día combate Flame **Bloque B**: escenario de **cuadra entera con esquina al fondo** [template `residential.block`, área jugable derivada del largo de la calle] + **autos con collider**; y **Bloque A**: arma+cargador con recarga auto, HP de zombies, victoria por cupo, colectables drop de zombies, economía, joystick centrado, **perf optimizada** [~57 FPS en profile]; y antes: vida del jugador + Game Over + balance, y **tiles MapTiler 512px nativo** [`zoomOffset:-1`] → ~⅓ requests + letras default. Más atrás: escena iso 2.5D jugable en Flame, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -165,6 +165,7 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 - [16-modelo-hexagonos-bd.md](16-modelo-hexagonos-bd.md) — BD de hexágonos: generación lazy (sparse, se materializa al jugar)
 - [17-inferencia-morfologia-urbana.md](17-inferencia-morfologia-urbana.md) — generar la escena cuando OSM **no trae edificios** (inferir zona desde calles + rellenar manzanas, determinista)
 - [18-scene-descriptor-templates.md](18-scene-descriptor-templates.md) — **pivot**: escena por *descriptor + templates orientados* (zona + topología + tags + POIs), NO geometría real (ADR 0007 Rev 2)
+- [19-mapa-amenazas.md](19-mapa-amenazas.md) — **amenazas en el mapa**: iconos deterministas (gradiente doc 16) → popup → "Atacar" → escena (Slice A hecho; B/C en backlog)
 - [spike-01-maptiler-flutter.md](spike-01-maptiler-flutter.md) — guía del spike
 - [decisions/](decisions/) — ADRs 0001-0007
 
@@ -326,7 +327,22 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       atraviesan (cobertura táctica). Test del template relajado a `v∈[-0.4,1.4]` (la esquina al fondo). 47 tests
       verdes; verificado en emulador (jugador frenado por el auto, cuadra atravesable, victoria). **Pendiente
       menor:** la esquina al fondo conviene mirarla con calma + tuning del template.
-    - ⬜ **Próximos:** (b) **descriptor OSM (Fase A)** para que la calle real elija/oriente el template;
+    - ✅ **HECHO (2026-06-04) — Mapa→combate Slice A (amenazas con iconos):** decidido por consulta
+      (grilla determinista simple / bottom sheet / vertical zombieGroup). Sobre el mapa se muestran
+      **iconos de amenaza** generados **sin BD, deterministas** por posición (gradiente de dificultad, doc 16):
+      `domain/models/map_marker.dart` (`MapMarker` + `MarkerKind {zombieGroup,boss,dungeon,base}` extensible +
+      `EnemyGroup`), `data/services/threat_service.dart` (puro, grilla lat/lng + hash → sparse 18% + gradiente
+      distancia-al-spawn ±textura), `ui/.../widgets/threat_widgets.dart` (`ThreatMarker` tappable coloreado por
+      dificultad + `ThreatDetailSheet` bottom sheet). `MapViewModel` expone `threats` y los regenera al mover la
+      cámara; `MarkerLayer` + `_showThreatSheet` en `map_screen`; **"Atacar"** → `CombatPlayScreen` (template
+      actual). Verificado end-to-end en emulador (gradiente visible: verde centro→rojo bordes). 51 tests verdes
+      (+4 de `ThreatService`). Spec: [19-mapa-amenazas.md](19-mapa-amenazas.md).
+    - ⬜ **Backlog mapa→combate (próximas iteraciones, decididas como pendientes):**
+      **(B)** la dificultad **maneja el combate** vía `CombatConfig` (la amenaza define `targetKills`/`zombieHp`/
+      ritmo; hoy el popup es informativo); **(C)** iconos de **boss/dungeon** (varios tipos; el modelo ya lo
+      soporta); **LOD/clustering** (a zoom ciudad los iconos se amontonan, doc 13); **densidad OSM** en el
+      gradiente + **H3** como id de celda; **POI real** en el nombre de la amenaza.
+    - ⬜ **Próximos (combate):** (b) **descriptor OSM (Fase A)** para que la calle real elija/oriente el template;
       (c) **sprites** (pipeline Blender al ángulo ¾ lockeado). Backlog: **crítico a la cabeza** como stat
       (zombies de 5 tiros + `critChance`) y tuning fino de combate.
     - ⬜ **Fase A del pivot (descriptor):** implementar `SceneDescriptor` (zona ya está + topología +

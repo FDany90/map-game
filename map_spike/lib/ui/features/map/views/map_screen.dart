@@ -7,14 +7,19 @@ import 'package:latlong2/latlong.dart';
 import '../../../../config/app_config.dart';
 import '../../../../data/repositories/territory_repository.dart';
 import '../../../../data/services/hex_grid_service.dart';
+import '../../../../data/services/threat_service.dart';
 import '../../../../data/services/tile_request_monitor.dart';
 import '../../../../domain/models/claim_result.dart';
+import '../../../../domain/models/map_marker.dart';
+import '../../../../domain/models/scene_template.dart';
 import '../../../widgets/tile_request_badge.dart';
+import '../../combat_scene/views/combat_play_screen.dart';
 import '../../combat_scene/views/iso_template_preview_screen.dart';
 import '../../osm_inspector/views/osm_inspector_screen.dart';
 import '../../zombies/views/zombie_spike_screen.dart';
 import '../view_models/map_view_model.dart';
 import 'widgets/economy_hud.dart';
+import 'widgets/threat_widgets.dart';
 
 /// Pantalla principal: mapa MapTiler + grilla de hexágonos + HUD de economía.
 ///
@@ -42,6 +47,7 @@ class _MapScreenState extends State<MapScreen> {
   late final MapViewModel _viewModel = MapViewModel(
     gridService: widget.gridService,
     territory: widget.territory,
+    threatService: ThreatService(spawn: AppConfig.initialCenter),
   );
 
   @override
@@ -61,6 +67,31 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
     }
+  }
+
+  /// Abre el popup (bottom sheet) de una amenaza; "Atacar" carga la escena de
+  /// combate (por ahora el template default; la dificultad manejará el combate en
+  /// una próxima iteración — `CombatConfig`).
+  void _showThreatSheet(MapMarker marker) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1B1F26),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetCtx) => ThreatDetailSheet(
+        marker: marker,
+        onAttack: () {
+          Navigator.of(sheetCtx).pop();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  CombatPlayScreen(template: SceneTemplates.all.first),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _changeZoom(double delta) {
@@ -155,7 +186,7 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   onTap: (_, point) => _onTapMap(point),
                   onPositionChanged: (camera, _) =>
-                      _viewModel.onZoomChanged(camera.zoom),
+                      _viewModel.onCameraChanged(camera.center, camera.zoom),
                 ),
                 children: [
                   TileLayer(
@@ -176,6 +207,22 @@ class _MapScreenState extends State<MapScreen> {
                           color: _viewModel.isClaimed(hex.id)
                               ? Colors.greenAccent.withValues(alpha: 0.45)
                               : Colors.cyanAccent.withValues(alpha: 0.04),
+                        ),
+                    ],
+                  ),
+                  // Amenazas (grupos de zombies, etc.) — iconos tappables.
+                  MarkerLayer(
+                    markers: [
+                      for (final m in _viewModel.threats)
+                        Marker(
+                          point: m.position,
+                          width: 48,
+                          height: 60,
+                          alignment: Alignment.topCenter,
+                          child: ThreatMarker(
+                            marker: m,
+                            onTap: () => _showThreatSheet(m),
+                          ),
                         ),
                     ],
                   ),
