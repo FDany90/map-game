@@ -2,7 +2,7 @@ import 'package:latlong2/latlong.dart';
 
 /// Tipo de amenaza/punto en el mapa. **Extensible:** sumar `boss`/`dungeon` reales
 /// = agregar el valor acá + su icono en el render (ADR 0007: mapa con iconos).
-enum MarkerKind { zombieGroup, boss, dungeon, base }
+enum MarkerKind { zombieGroup, boss, dungeon, base, camp }
 
 extension MarkerKindInfo on MarkerKind {
   String get label => switch (this) {
@@ -10,6 +10,7 @@ extension MarkerKindInfo on MarkerKind {
         MarkerKind.boss => 'Boss',
         MarkerKind.dungeon => 'Dungeon',
         MarkerKind.base => 'Base',
+        MarkerKind.camp => 'Campamento',
       };
 
   /// Glyph del icono en el mapa (placeholder hasta tener sprites).
@@ -18,6 +19,7 @@ extension MarkerKindInfo on MarkerKind {
         MarkerKind.boss => '💀',
         MarkerKind.dungeon => '🌀',
         MarkerKind.base => '🛡️',
+        MarkerKind.camp => '⛺',
       };
 }
 

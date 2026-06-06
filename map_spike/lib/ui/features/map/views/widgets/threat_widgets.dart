@@ -69,10 +69,19 @@ class ThreatDetailSheet extends StatelessWidget {
     super.key,
     required this.marker,
     required this.onAttack,
+    this.canAttack = true,
+    this.distanceMeters,
   });
 
   final MapMarker marker;
   final VoidCallback onAttack;
+
+  /// Si la amenaza está dentro del radio de ataque (de tu posición/campamento/
+  /// base). Si es `false`, "Atacar" se deshabilita con un motivo.
+  final bool canAttack;
+
+  /// Distancia al anclaje más cercano (para el hint cuando está fuera de rango).
+  final double? distanceMeters;
 
   @override
   Widget build(BuildContext context) {
@@ -167,16 +176,50 @@ class ThreatDetailSheet extends StatelessWidget {
                   ],
                 ),
               ),
+            // Hint de "fuera de alcance": por qué no se puede atacar y a qué
+            // distancia está (regla de proximidad — atacás cerca de tu posición,
+            // campamento o base).
+            if (!canAttack) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.my_location,
+                        size: 16, color: Colors.white54),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        distanceMeters == null
+                            ? 'Fuera de alcance. Acercá tu campamento o tu posición.'
+                            : 'A ${distanceMeters!.round()} m. Acercate (o mové tu '
+                                'campamento) a menos de 300 m para atacar.',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: onAttack,
-                    icon: const Icon(Icons.local_fire_department),
-                    label: const Text('Atacar'),
+                    onPressed: canAttack ? onAttack : null,
+                    icon: Icon(canAttack
+                        ? Icons.local_fire_department
+                        : Icons.block),
+                    label: Text(canAttack ? 'Atacar' : 'Fuera de alcance'),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFFE5484D),
+                      disabledBackgroundColor: Colors.white12,
+                      disabledForegroundColor: Colors.white38,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),

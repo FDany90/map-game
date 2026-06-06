@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../data/services/tile_request_monitor.dart';
 
-/// Chip de diagnóstico que muestra, en vivo, cuántos **requests a MapTiler**
-/// (cache misses = facturables) se gastaron en la prueba actual. Tocarlo cierra
-/// la prueba: pone el contador en 0 e imprime el resumen por zoom en consola.
+/// Chip de diagnóstico que muestra, en vivo, los **requests a MapTiler** (cache
+/// misses = facturables): el acumulado **del día en UTC** (persistido, sobrevive
+/// reinicios → comparable con el dashboard) y, entre paréntesis, los de la prueba
+/// actual. Tocarlo cierra la prueba: pone el contador de run en 0 e imprime el
+/// resumen por zoom en consola. El total del día NO se resetea (rola en UTC).
 class TileRequestBadge extends StatelessWidget {
   const TileRequestBadge({super.key});
 
@@ -29,18 +31,16 @@ class TileRequestBadge extends StatelessWidget {
                       size: 14, color: Colors.amberAccent),
                   const SizedBox(width: 6),
                   Text(
-                    'MapTiler: ${m.session}',
+                    'MapTiler hoy: ${m.todayTotal}',
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
                         fontWeight: FontWeight.w600),
                   ),
-                  if (m.total != m.session) ...[
-                    const SizedBox(width: 4),
-                    Text('(tot ${m.total})',
-                        style: const TextStyle(
-                            color: Colors.white54, fontSize: 10)),
-                  ],
+                  const SizedBox(width: 4),
+                  Text('(run ${m.session})',
+                      style: const TextStyle(
+                          color: Colors.white54, fontSize: 10)),
                   const SizedBox(width: 6),
                   const Icon(Icons.refresh, size: 13, color: Colors.white54),
                 ],

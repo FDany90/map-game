@@ -7,10 +7,13 @@ import 'package:latlong2/latlong.dart';
 import '../../../../config/app_config.dart';
 import '../../../../data/repositories/territory_repository.dart';
 import '../../../../data/services/hex_grid_service.dart';
+import '../../../../data/services/save_store.dart';
 import '../../../../data/services/threat_service.dart';
 import '../../../../data/services/tile_request_monitor.dart';
+import '../../../../domain/models/build_result.dart';
 import '../../../../domain/models/claim_result.dart';
 import '../../../../domain/models/map_marker.dart';
+import '../../../../domain/models/outpost.dart';
 import '../../../../domain/models/scene_template.dart';
 import '../../../widgets/tile_request_badge.dart';
 import '../../combat_scene/views/combat_play_screen.dart';
@@ -19,7 +22,12 @@ import '../../osm_inspector/views/osm_inspector_screen.dart';
 import '../../zombies/views/zombie_spike_screen.dart';
 import '../view_models/map_view_model.dart';
 import 'widgets/economy_hud.dart';
+import 'widgets/outpost_widgets.dart';
 import 'widgets/threat_widgets.dart';
+
+/// Modo de colocación activo: cuando no es [none], el próximo toque en el mapa
+/// ubica algo (mi posición / campamento) en vez de reclamar un hexágono.
+enum _PlaceMode { none, moveLocation, placeCamp }
 
 /// Pantalla principal: mapa MapTiler + grilla de hexágonos + HUD de economía.
 ///
@@ -32,40 +40,151 @@ class MapScreen extends StatefulWidget {
     required this.tileStore,
     required this.gridService,
     required this.territory,
+    this.saveStore,
   });
 
   final CacheStore tileStore;
   final HexGridService gridService;
   final TerritoryRepository territory;
+  final SaveStore? saveStore;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final MapController _mapController = MapController();
   late final MapViewModel _viewModel = MapViewModel(
     gridService: widget.gridService,
     territory: widget.territory,
     threatService: ThreatService(spawn: AppConfig.initialCenter),
+    saveStore: widget.saveStore,
   );
+
+  _PlaceMode _placeMode = _PlaceMode.none;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Guardar YA cuando la app pasa a segundo plano / se cierra: no perder el
+    // avance ganado entre guardados debounced (doc 22).
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _viewModel.saveNow();
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _viewModel.saveNow();
     _viewModel.dispose();
     _mapController.dispose();
     super.dispose();
   }
 
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(msg),
+        duration: const Duration(milliseconds: 1400),
+      ));
+  }
+
   void _onTapMap(LatLng point) {
-    final result = _viewModel.claimNearest(point);
-    if (result == ClaimResult.notEnoughSupplies) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No tenés suficientes suministros (cuesta 10)'),
-          duration: Duration(milliseconds: 1200),
+    switch (_placeMode) {
+      case _PlaceMode.moveLocation:
+        _viewModel.movePlayerTo(point);
+        setState(() => _placeMode = _PlaceMode.none);
+        _snack('📍 Te moviste acá');
+        return;
+      case _PlaceMode.placeCamp:
+        final r = _viewModel.placeCamp(point);
+        setState(() => _placeMode = _PlaceMode.none);
+        _snack(r == BuildResult.success ? '⛺ Campamento listo' : r.error!);
+        return;
+      case _PlaceMode.none:
+        final result = _viewModel.claimNearest(point);
+        if (result == ClaimResult.notEnoughSupplies) {
+          _snack('No tenés suficientes suministros (cuesta 10)');
+        }
+    }
+  }
+
+  /// Abre el menú de construcción (campamento / base / mover ubicación).
+  void _openBuildMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1B1F26),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetCtx) => BuildMenuSheet(
+        hasCamp: _viewModel.camp != null,
+        hasBase: _viewModel.hasBase,
+        campCost: _viewModel.campCost,
+        baseCost: _viewModel.baseCost,
+        canAffordCamp: _viewModel.canAffordCamp,
+        canAffordBase: _viewModel.canAffordBase,
+        onMoveLocation: () {
+          Navigator.of(sheetCtx).pop();
+          setState(() => _placeMode = _PlaceMode.moveLocation);
+        },
+        onPlaceCamp: () {
+          Navigator.of(sheetCtx).pop();
+          setState(() => _placeMode = _PlaceMode.placeCamp);
+        },
+        onFoundBase: () {
+          Navigator.of(sheetCtx).pop();
+          _confirmFoundBase();
+        },
+      ),
+    );
+  }
+
+  /// Confirmación **fuerte** antes de fundar la base (es permanente y mover
+  /// después es costoso). Se funda en la posición actual del jugador.
+  Future<void> _confirmFoundBase() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1F26),
+        title: const Text('¿Fundar tu base acá?',
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Tu base es PERMANENTE y se ancla a esta cuadra (tu posición actual).\n\n'
+          'Elegí bien: mover una base después es muy costoso. Conviene fundarla '
+          'donde vivís o jugás la mayor parte del tiempo.\n\n'
+          'Costo: ${_viewModel.baseCost.round()} suministros.',
+          style: const TextStyle(color: Colors.white70),
         ),
-      );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF46C66B)),
+            child: const Text('Fundar acá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final r = _viewModel.foundBaseAtPlayer();
+    if (r == BuildResult.success) {
+      _snack('🛡️ Base fundada. ¡Tu territorio!');
+    } else {
+      _snack(r.error ?? 'No se pudo fundar la base');
     }
   }
 
@@ -81,6 +200,8 @@ class _MapScreenState extends State<MapScreen> {
       ),
       builder: (sheetCtx) => ThreatDetailSheet(
         marker: marker,
+        canAttack: _viewModel.canAttack(marker),
+        distanceMeters: _viewModel.distanceToNearestAnchor(marker),
         onAttack: () {
           Navigator.of(sheetCtx).pop();
           Navigator.of(context).push(
@@ -160,6 +281,64 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  /// Chip de estado: indica la progresión sin base → campamento → base.
+  Widget _statusPill() {
+    final (icon, text, color) = switch ((_viewModel.hasBase, _viewModel.camp)) {
+      (true, _) => ('🛡️', 'Base', const Color(0xFF46C66B)),
+      (false, != null) => ('⛺', 'Campamento', const Color(0xFFE5B53D)),
+      _ => ('🧍', 'Sin base', Colors.white54),
+    };
+    return Material(
+      color: Colors.black.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Text(text,
+                style: TextStyle(
+                    color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Banner del modo colocación: dice qué tocar y permite cancelar.
+  Widget _placeBanner() {
+    final text = _placeMode == _PlaceMode.moveLocation
+        ? '📍 Tocá el mapa para moverte ahí'
+        : '⛺ Tocá el mapa para ubicar el campamento';
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E7DEB).withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(text,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: () => setState(() => _placeMode = _PlaceMode.none),
+            borderRadius: BorderRadius.circular(16),
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.close, size: 18, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -210,6 +389,22 @@ class _MapScreenState extends State<MapScreen> {
                         ),
                     ],
                   ),
+                  // Radio de ataque alrededor de cada anclaje (posición/camp/
+                  // base): hace VISIBLE dónde se puede atacar (skill UI: diegético
+                  // en el mapa, no en un cartel).
+                  CircleLayer(
+                    circles: [
+                      for (final a in _viewModel.attackAnchors)
+                        CircleMarker(
+                          point: a,
+                          radius: MapViewModel.attackRadiusMeters,
+                          useRadiusInMeter: true,
+                          color: Colors.cyanAccent.withValues(alpha: 0.06),
+                          borderColor: Colors.cyanAccent.withValues(alpha: 0.35),
+                          borderStrokeWidth: 1.5,
+                        ),
+                    ],
+                  ),
                   // Amenazas (grupos de zombies, etc.) — iconos tappables.
                   MarkerLayer(
                     markers: [
@@ -224,6 +419,33 @@ class _MapScreenState extends State<MapScreen> {
                             onTap: () => _showThreatSheet(m),
                           ),
                         ),
+                    ],
+                  ),
+                  // Asentamientos + posición del jugador (encima de las amenazas).
+                  MarkerLayer(
+                    markers: [
+                      if (_viewModel.camp != null)
+                        Marker(
+                          point: _viewModel.camp!.position,
+                          width: 72,
+                          height: 72,
+                          alignment: Alignment.topCenter,
+                          child: const OutpostMarker(kind: OutpostKind.camp),
+                        ),
+                      if (_viewModel.base != null)
+                        Marker(
+                          point: _viewModel.base!.position,
+                          width: 72,
+                          height: 72,
+                          alignment: Alignment.topCenter,
+                          child: const OutpostMarker(kind: OutpostKind.base),
+                        ),
+                      Marker(
+                        point: _viewModel.playerPosition,
+                        width: 30,
+                        height: 30,
+                        child: const PlayerLocationMarker(),
+                      ),
                     ],
                   ),
                   const RichAttributionWidget(
@@ -246,6 +468,25 @@ class _MapScreenState extends State<MapScreen> {
                   zoom: _viewModel.zoom,
                 ),
               ),
+              // Chip de estado del asentamiento (sin base / campamento / base).
+              Positioned(
+                top: 0,
+                right: 8,
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 70),
+                    child: _statusPill(),
+                  ),
+                ),
+              ),
+              // Banner de modo colocación: instrucción + cancelar.
+              if (_placeMode != _PlaceMode.none)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(child: Center(child: _placeBanner())),
+                ),
               const Positioned(
                 left: 8,
                 bottom: 8,
@@ -264,6 +505,14 @@ class _MapScreenState extends State<MapScreen> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          FloatingActionButton.extended(
+            heroTag: 'build',
+            backgroundColor: Colors.teal.shade600,
+            onPressed: _openBuildMenu,
+            icon: const Icon(Icons.construction),
+            label: const Text('Construir'),
+          ),
+          const SizedBox(height: 8),
           FloatingActionButton(
             heroTag: 'zin',
             mini: true,
@@ -339,7 +588,12 @@ class _MapScreenState extends State<MapScreen> {
             mini: true,
             backgroundColor: Colors.red.shade700,
             // Cierra la app de forma prolija en Android (no usar exit(0)).
-            onPressed: () => SystemNavigator.pop(),
+            // Guarda SINCRÓNICO antes de cerrar: `pop()` finaliza la actividad al
+            // instante y un write async no llegaría a completar (doc 22).
+            onPressed: () {
+              _viewModel.saveNow();
+              SystemNavigator.pop();
+            },
             child: const Icon(Icons.close),
           ),
         ],

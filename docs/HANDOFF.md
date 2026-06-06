@@ -1,6 +1,9 @@
 # 🟢 HANDOFF — Empezá acá para retomar
 
-> Última actualización: **2026-06-04** (**mapa → combate Slice A**: iconos de amenaza 🧟 deterministas [gradiente de dificultad, doc 16] → bottom sheet con dificultad/enemigos → "Atacar" carga la escena; antes ese día combate Flame **Bloque B**: escenario de **cuadra entera con esquina al fondo** [template `residential.block`, área jugable derivada del largo de la calle] + **autos con collider**; y **Bloque A**: arma+cargador con recarga auto, HP de zombies, victoria por cupo, colectables drop de zombies, economía, joystick centrado, **perf optimizada** [~57 FPS en profile]; y antes: vida del jugador + Game Over + balance, y **tiles MapTiler 512px nativo** [`zoomOffset:-1`] → ~⅓ requests + letras default. Más atrás: escena iso 2.5D jugable en Flame, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
+> Última actualización: **2026-06-05** (**campamento + base en el mapa** [presencia/GPS, proximidad para
+> atacar, doc 20] · **persistencia del save** [el avance sobrevive cada corrida, catch-up offline acotado,
+> docs 22] · notas: **stats mejorables** doc 21 · monitor de requests acumula por fecha UTC en disco).
+> Antes — **2026-06-04** (**mapa → combate Slice A**: iconos de amenaza 🧟 deterministas [gradiente de dificultad, doc 16] → bottom sheet con dificultad/enemigos → "Atacar" carga la escena; antes ese día combate Flame **Bloque B**: escenario de **cuadra entera con esquina al fondo** [template `residential.block`, área jugable derivada del largo de la calle] + **autos con collider**; y **Bloque A**: arma+cargador con recarga auto, HP de zombies, victoria por cupo, colectables drop de zombies, economía, joystick centrado, **perf optimizada** [~57 FPS en profile]; y antes: vida del jugador + Game Over + balance, y **tiles MapTiler 512px nativo** [`zoomOffset:-1`] → ~⅓ requests + letras default. Más atrás: escena iso 2.5D jugable en Flame, cámara ¾ lockeada, bandas de zoom + monitor, Inspector OSM, pivot *descriptor + templates* ADR 0007 Rev 2/3)
 > Este documento es el punto de entrada para continuar el proyecto en otra sesión
 > (o si se limpia el chat). Resume el estado, lo resuelto, lo pendiente y cómo seguir.
 
@@ -166,6 +169,9 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
 - [17-inferencia-morfologia-urbana.md](17-inferencia-morfologia-urbana.md) — generar la escena cuando OSM **no trae edificios** (inferir zona desde calles + rellenar manzanas, determinista)
 - [18-scene-descriptor-templates.md](18-scene-descriptor-templates.md) — **pivot**: escena por *descriptor + templates orientados* (zona + topología + tags + POIs), NO geometría real (ADR 0007 Rev 2)
 - [19-mapa-amenazas.md](19-mapa-amenazas.md) — **amenazas en el mapa**: iconos deterministas (gradiente doc 16) → popup → "Atacar" → escena (Slice A hecho; B/C en backlog)
+- [20-campamento-base-mapa.md](20-campamento-base-mapa.md) — **construir campamento/base en el mapa**: progresión sin base→campamento→base, anclaje por presencia (GPS), proximidad para atacar (Slice 1 hecho)
+- [21-stats-mejorables.md](21-stats-mejorables.md) — **sistema de progresión**: catálogo de stats mejorables (rango de ataque como semilla, base/personaje, radios, economía) — brainstorm/backlog
+- [22-persistencia-economia.md](22-persistencia-economia.md) — **persistir el save** (que se sienta el avance): catch-up offline acotado, persistir-primero, plan por fases (save local → economía doc 05 → backend)
 - [spike-01-maptiler-flutter.md](spike-01-maptiler-flutter.md) — guía del spike
 - [decisions/](decisions/) — ADRs 0001-0007
 
@@ -337,6 +343,34 @@ Claude los dispara solo según su descripción; a mano: `/<nombre>`. Detalle en 
       cámara; `MarkerLayer` + `_showThreatSheet` en `map_screen`; **"Atacar"** → `CombatPlayScreen` (template
       actual). Verificado end-to-end en emulador (gradiente visible: verde centro→rojo bordes). 51 tests verdes
       (+4 de `ThreatService`). Spec: [19-mapa-amenazas.md](19-mapa-amenazas.md).
+    - ✅ **HECHO (2026-06-05) — Campamento + Base en el mapa (Slice 1, doc 20):** progresión
+      **sin base → campamento → base** (onboarding doc 16). `domain/models/outpost.dart`
+      (`OutpostKind {camp,base}` + `Outpost`) + `build_result.dart`; `TerritoryRepository` sumó
+      `placeCamp`/`foundBase` + costos (`campCost` 20 / `baseCost` 150). **Campamento** ⛺: barato,
+      colocable **en cualquier lado** (tocás el mapa), movible. **Base** 🛡️: cara, **solo se funda
+      en tu posición actual** (regla de **presencia/GPS** — anti-abuso: para fundarla en otro lado
+      hay que ir hasta ahí), con **confirmación fuerte**, anclada al hex (doc 15). **GPS simulado**
+      (marker "mi ubicación" movible; GPS real en Etapa 7). **Proximidad para atacar:** "Atacar" del
+      popup se habilita solo si la amenaza está a ≤300 m de tu posición/campamento/base (`canAttack`),
+      con `CircleLayer` que **dibuja el radio**; fuera de rango → deshabilitado con la distancia.
+      **UI:** FAB "Construir" → menú (mover ubicación / campamento / fundar base con costos y disable),
+      banner de modo colocación, markers, chip de estado. `flutter analyze` limpio · **58 tests** (+7
+      de `outpost_test`). Skill `mobile-game-ui-design` aplicado (thumb zone, 48dp, overlay diegético).
+    - ✅ **HECHO (2026-06-05) — Persistencia del save (doc 22, Paso 1):** el estado del jugador ahora
+      **sobrevive a cada corrida**. `domain/models/player_save.dart` (snapshot serializable, `version`
+      para migraciones, parse tolerante → null si corrupto), `data/services/save_store.dart` (JSON en
+      Application Support, **debounce coalescido**), `TerritoryRepository` ahora dueño de `playerPosition`
+      + `toSave()`/`restore()` puros + `applyOfflineCatchUp()` (**catch-up offline acotado a 1 h**, doc 22).
+      Wiring: `main()` carga el save → restaura → aplica catch-up; el VM guarda en cada acción y **al
+      pausar la app** (`AppLifecycleState.paused`, `WidgetsBindingObserver`). **Verificado end-to-end en
+      emulador:** reclamar hexes escribe `player_save.json`; cerrar+relanzar arranca con los hexes y
+      suministros >50 (catch-up sumado). `flutter analyze` limpio · **67 tests** (+7 de `save_test`).
+      **Bugs encontrados y arreglados:** (1) el debounce que reseteaba el timer en cada tick (4×/s)
+      nunca escribía → **coalescer sin resetear** (mismo fix al monitor de requests); (2) el guardado al
+      cerrar era async → el **botón rojo de cerrar** (`SystemNavigator.pop()`) mataba el proceso antes de
+      completar el write y se perdía lo último → **guardado SINCRÓNICO** al cerrar/pausar (`flushSync`
+      + guardar antes de `pop()`). **Verificado:** reclamar + cerrar dentro de 2 s (antes del debounce)
+      persiste igual. Próximo (Paso 2): economía doc 05 (loot finito + 3 recursos + **combate→recursos**).
     - ⬜ **Backlog mapa→combate (próximas iteraciones, decididas como pendientes):**
       **(B)** la dificultad **maneja el combate** vía `CombatConfig` (la amenaza define `targetKills`/`zombieHp`/
       ritmo; hoy el popup es informativo); **(C)** iconos de **boss/dungeon** (varios tipos; el modelo ya lo

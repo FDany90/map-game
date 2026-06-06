@@ -143,9 +143,16 @@ de zoom discretas por modo**, cada una con **área acotada**.
   (Etapa 7) se diseña aparte y con más cuidado de costo (es el que más genera).
 
 ### Medición en la app
-Se agregó un **monitor de requests in-app** (`TileRequestMonitor` + chip "🛰️ MapTiler: N"): cuenta
-solo los que pegan a la red (misses = facturables), por prueba, con desglose por zoom en consola.
-Permite verificar el presupuesto empíricamente en cada cambio de diseño.
+Se agregó un **monitor de requests in-app** (`TileRequestMonitor` + chip "🛰️ MapTiler hoy: N (run M)"):
+cuenta solo los que pegan a la red (misses = facturables), con desglose por zoom en consola.
+
+**Acumulación por fecha que sobrevive reinicios (2026-06-05):** el monitor persiste un total
+**por fecha en UTC** en disco (`tile_requests_by_date.json` en Application Support), así que `hoy(UTC)`
+del chip **se mantiene aunque reinicies** (`flutter run` / hot restart) — resuelve el subconteo del
+04 (sumar a ojo primer+último run). Se bucketea en **UTC, no en hora local**, porque el dashboard de
+MapTiler corta el día en UTC → `hoy(UTC)` es **comparable directo** con la barra del día en Analytics.
+El `(run M)` es el contador de la prueba actual; tocar el chip lo resetea (e imprime el desglose por
+zoom), pero **el total del día no se toca** (rola solo a medianoche UTC).
 
 ## Historial de requests por sesión (log de medición)
 
@@ -157,11 +164,17 @@ leer el chip). El dashboard **no es en tiempo real** → chequear al día siguie
 
 | Fecha | Sesión (qué se hizo) | Requests medidos (app) | En Analytics MapTiler | Notas |
 |---|---|---|---|---|
-| 2026-06-04 | Testeo combate (Bloques A/B) + mapa Slice A; **muchos reinicios** + zoom-out a z13/z10 para ver markers | **145** | _(pendiente: chequear 2026-06-05)_ | 28 del 1er run (caché limpia, vista inicial z16) + 117 del último (zoom-out a niveles nuevos). Todos tiles **512px**. |
+| 2026-06-04 | Testeo combate (Bloques A/B) + mapa Slice A; **muchos reinicios** + zoom-out a z13/z10 para ver markers | **145** *(subconteo)* | **468** (Jun 5 UTC; todo "Rendered maps 512px") | El 145 **solo sumó 2 runs** (28 del 1er run + 117 del último); los **reinicios del medio** no se contaron. La sesión (tarde/noche ART) cae como **Jun 5 en UTC** → la barra de 468 es la sesión entera. **No valida el monitor**: valida que sumar a ojo subcuenta con reinicios. |
 
+> ⚠️ **Lección 2026-06-05:** el chip se **resetea por run**, así que sumar "primer + último chip"
+> a mano **subcuenta** (acá 145 vs 468 reales, ~3×). Para **validar el monitor** de verdad hace falta
+> un **único run sin reiniciar** y comparar ESE chip contra el **delta** del dashboard al día siguiente.
+> Para **medir el gasto de una sesión con reinicios**, sumar **todas** las líneas `[tiles] MISS` de la
+> consola, no el chip.
+>
 > Al cerrar cada sesión de testeo intenso, agregar una fila acá y completar la columna de Analytics
-> al día siguiente. Si **medido ≈ Analytics**, el monitor es confiable para presupuestar sin abrir el
-> dashboard.
+> al día siguiente. La comparación **medido vs Analytics** solo es concluyente si el "medido" salió de
+> un único run (o de contar todas las líneas MISS).
 
 ## Salidas de escape (costo plano, no por jugador)
 
